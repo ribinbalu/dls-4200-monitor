@@ -1,0 +1,2692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Temperature Monitoring System DLS-4200</title>
+  <style>
+    :root {
+      --bg-main: #0b1120;
+      --bg-gradient: radial-gradient(circle at top, #1e293b 0%, #0b1120 100%);
+      --card-bg: rgba(30, 41, 59, 0.75);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --card-glow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      
+      --success-bg: rgba(34, 197, 94, 0.15);
+      --success-text: #4ade80;
+      --success-border: #22c55e;
+      
+      --danger-bg: rgba(239, 68, 68, 0.15);
+      --danger-text: #f87171;
+      --danger-border: #ef4444;
+      
+      --blue-bg: rgba(56, 189, 248, 0.15);
+      --blue-text: #38bdf8;
+      --blue-border: #0284c7;
+    }
+
+    body.night-mode {
+      --bg-main: #030712;
+      --bg-gradient: radial-gradient(circle at top, #0f172a 0%, #030712 100%);
+      --card-bg: rgba(15, 23, 42, 0.88);
+      --card-border: rgba(255, 255, 255, 0.06);
+      --text-primary: #cbd5e1;
+      --text-secondary: #64748b;
+      filter: brightness(0.88) contrast(1.05);
+    }
+
+    @keyframes cautionFlash {
+      0% { background-color: rgba(239, 68, 68, 0.2); border-color: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
+      50% { background-color: rgba(239, 68, 68, 0.55); border-color: #f87171; box-shadow: 0 0 28px rgba(239, 68, 68, 0.8); }
+      100% { background-color: rgba(239, 68, 68, 0.2); border-color: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
+    }
+
+    @keyframes criticalFlash {
+      0% { background-color: rgba(185, 28, 28, 0.4); border-color: #dc2626; box-shadow: 0 0 16px rgba(220, 38, 38, 0.6); }
+      50% { background-color: rgba(220, 38, 38, 0.85); border-color: #fca5a5; box-shadow: 0 0 35px rgba(239, 68, 68, 0.95); }
+      100% { background-color: rgba(185, 28, 28, 0.4); border-color: #dc2626; box-shadow: 0 0 16px rgba(220, 38, 38, 0.6); }
+    }
+
+    @keyframes soundTestPulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.6); }
+      50% { transform: scale(1.06); box-shadow: 0 0 0 12px rgba(56, 189, 248, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+    }
+
+    .testing-active {
+      animation: soundTestPulse 0.5s infinite ease-in-out;
+      background: #0284c7 !important;
+      color: #ffffff !important;
+      border-color: #38bdf8 !important;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.7) !important;
+    }
+
+    @keyframes transmitPulse {
+      0% { left: 0%; opacity: 0; transform: scale(0.4); }
+      15% { opacity: 1; transform: scale(1); }
+      85% { opacity: 1; transform: scale(1); }
+      100% { left: 95%; opacity: 0; transform: scale(0.4); }
+    }
+
+    @keyframes breakParticleMove {
+      0% { left: 0%; opacity: 0; transform: scale(0.6); }
+      30% { opacity: 1; transform: scale(1.2); }
+      48% { opacity: 1; transform: scale(1.5); box-shadow: 0 0 15px #ef4444; }
+      50% { left: 42%; opacity: 0; transform: scale(0); }
+      100% { left: 42%; opacity: 0; }
+    }
+
+    @keyframes breakBadgePulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(0.95); box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+      50% { transform: translate(-50%, -50%) scale(1.08); box-shadow: 0 0 20px #ef4444, 0 0 35px #f87171; }
+    }
+
+    @keyframes brokenTrackFlash {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.9; }
+    }
+
+    @keyframes antennaGlow {
+      0%, 100% { filter: drop-shadow(0 0 4px #38bdf8); }
+      50% { filter: drop-shadow(0 0 14px #38bdf8); }
+    }
+
+    body.link-active .active-link-line { stroke: #4ade80 !important; }
+    body.link-active .active-pulse { display: block !important; fill: #4ade80 !important; }
+    body.link-active .active-wave { stroke: #4ade80 !important; display: block !important; }
+
+    body.link-inactive .active-link-line { 
+      stroke: #ef4444 !important; 
+      animation: brokenTrackFlash 1.5s infinite ease-in-out !important; 
+    }
+    body.link-inactive .active-pulse { display: none !important; }
+    body.link-inactive .active-wave { 
+      stroke: #ef4444 !important; 
+      animation: brokenTrackFlash 1.5s infinite ease-in-out !important; 
+    }
+
+    html, body {
+      min-height: 100vh; margin: 0; padding: 0;
+      background: var(--bg-gradient); 
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      box-sizing: border-box;
+      transition: background 0.3s ease;
+    }
+
+    body { 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      padding: 20px 16px; 
+    }
+
+    .login-wrapper {
+      width: 100%;
+      max-width: 440px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 20px;
+      padding: 30px 24px;
+      box-shadow: var(--card-glow);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    .login-title { font-size: 16px; font-weight: 800; color: #ffffff; text-align: center; letter-spacing: 0.5px; margin: 0; line-height: 1.3; }
+    .login-title-sub { color: var(--blue-text); display: block; margin-top: 6px; font-size: 17px; font-weight: 800; letter-spacing: 1px; }
+    .login-subtitle { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 6px; }
+
+    .input-group { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+    .input-label { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.8px; }
+    .input-field {
+      width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--card-border);
+      background: rgba(15, 23, 42, 0.8); color: #ffffff; font-size: 14px; outline: none; box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    .input-field:focus { border-color: #38bdf8; }
+    .input-field[readonly] { background: rgba(15, 23, 42, 0.4); color: #94a3b8; cursor: not-allowed; }
+
+    .login-btn-submit {
+      width: 100%; padding: 12px; border-radius: 10px; border: none;
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      color: #ffffff; font-size: 13px; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase; cursor: pointer; transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+    }
+    .login-btn-submit:hover { background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%); transform: translateY(-1px); }
+
+    .error-msg { color: #f87171; font-size: 12px; font-weight: 700; text-align: center; display: none; }
+
+    .dashboard-container { 
+      width: 100%; 
+      max-width: 1200px; 
+      display: none; 
+      flex-direction: column; 
+      gap: 14px;
+    }
+
+    .header-panel {
+      background: var(--card-bg); 
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 16px; 
+      padding: 14px 22px; 
+      display: flex; 
+      justify-content: flex-start; 
+      align-items: center;
+      box-shadow: var(--card-glow);
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .logo-card {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      padding: 8px 18px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      flex-shrink: 0;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .logo-card:hover { 
+      transform: scale(1.02); 
+      border-color: rgba(56, 189, 248, 0.5);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), 0 0 16px rgba(56, 189, 248, 0.2);
+    }
+    .logo-card svg { height: 34px; width: auto; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+
+    .header-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .brand-group h1 { margin: 0; font-size: 18px; font-weight: 800; color: #ffffff; letter-spacing: -0.2px; }
+    .brand-group span { font-size: 11px; font-weight: 700; color: var(--blue-text); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 2px; display: block; }
+
+    .time-card {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 6px 14px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      box-shadow: inset 0 0 10px rgba(56, 189, 248, 0.05);
+    }
+    .time-val { font-size: 13px; font-weight: 800; color: #38bdf8; font-family: 'Courier New', Courier, monospace; letter-spacing: 0.5px; }
+    .time-lbl { font-size: 8.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; }
+
+    .status-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 30px; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; white-space: nowrap; }
+    .status-active { background-color: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-border); box-shadow: 0 0 12px rgba(34, 197, 94, 0.2); }
+    .status-inactive { background-color: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-border); box-shadow: 0 0 12px rgba(239, 68, 68, 0.2); }
+
+    .action-btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; text-decoration: none; text-transform: uppercase; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); white-space: nowrap; cursor: pointer; border: 1px solid transparent;
+    }
+    .history-btn { background: rgba(30, 41, 59, 0.9); color: var(--text-primary); border-color: rgba(255, 255, 255, 0.2); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
+    .history-btn:hover { background: #334155; border-color: #38bdf8; box-shadow: 0 0 16px rgba(56, 189, 248, 0.4); transform: translateY(-2px); }
+
+    .cloud-btn { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; border-color: #38bdf8; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4); }
+    .cloud-btn:hover { background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%); border-color: #7dd3fc; box-shadow: 0 0 20px rgba(56, 189, 248, 0.7); transform: translateY(-2px); }
+
+    .settings-btn { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .settings-btn:hover { background: #0284c7; color: #ffffff; border-color: #38bdf8; transform: translateY(-2px); }
+
+    .alarm-hist-btn { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .alarm-hist-btn:hover { background: #d97706; color: #ffffff; border-color: #fbbf24; transform: translateY(-2px); }
+
+    .about-btn { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; border-color: rgba(148, 163, 184, 0.4); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .about-btn:hover { background: #475569; color: #ffffff; border-color: #cbd5e1; transform: translateY(-2px); }
+
+    .night-btn { background: transparent; border: none; font-size: 18px; cursor: pointer; padding: 4px; transition: transform 0.2s ease; }
+    .night-btn:hover { transform: scale(1.15); }
+
+    .restart-btn { background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.4); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
+    .restart-btn:hover { background: #ef4444; color: #ffffff; border-color: #f87171; box-shadow: 0 0 16px rgba(239, 68, 68, 0.6); transform: translateY(-2px); }
+
+    .logout-btn { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border-color: rgba(148, 163, 184, 0.4); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
+    .logout-btn:hover { background: #475569; color: #ffffff; border-color: #94a3b8; transform: translateY(-2px); }
+
+    .csv-btn { background: rgba(34, 197, 94, 0.2); color: #4ade80; border-color: rgba(34, 197, 94, 0.4); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
+    .csv-btn:hover { background: #22c55e; color: #ffffff; border-color: #4ade80; box-shadow: 0 0 16px rgba(34, 197, 94, 0.6); transform: translateY(-2px); }
+
+    .sync-btn { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
+    .sync-btn:hover { background: #0284c7; color: #ffffff; border-color: #38bdf8; box-shadow: 0 0 16px rgba(56, 189, 248, 0.6); transform: translateY(-2px); }
+
+    .action-btn svg { width: 14px; height: 14px; fill: currentColor; }
+
+    .link-active .show-inactive { display: none !important; }
+    .link-active .show-active { display: flex !important; }
+    .link-inactive .show-active { display: none !important; }
+    .link-inactive .show-inactive { display: flex !important; }
+    .link-inactive .antenna-box svg { fill: var(--danger-text) !important; filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.7)) !important; animation: none !important; }
+    .link-inactive .antenna-label { color: var(--danger-text) !important; }
+
+    .antenna-panel { background: var(--card-bg); border: 1px solid var(--card-border); backdrop-filter: blur(12px); border-radius: 16px; padding: 16px 30px; display: flex; align-items: center; justify-content: space-between; box-shadow: var(--card-glow); }
+    .antenna-box { display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 2; min-width: 120px; }
+    .antenna-box svg { width: 32px; height: 32px; fill: var(--blue-text); animation: antennaGlow 2s infinite ease-in-out; }
+    .antenna-label { font-size: 10px; font-weight: 800; color: var(--text-secondary); letter-spacing: 1.2px; text-transform: uppercase; text-align: center; }
+
+    .signal-path { flex-grow: 1; height: 2px; background: repeating-linear-gradient(90deg, var(--card-border) 0, var(--card-border) 8px, transparent 8px, transparent 16px); margin: 0 20px; position: relative; overflow: visible; }
+    .signal-pulse { position: absolute; top: 50%; left: 0%; width: 10px; height: 10px; margin-top: -5px; background-color: #4ade80; border-radius: 50%; box-shadow: 0 0 10px #4ade80, 0 0 20px #4ade80; animation: transmitPulse 2.2s infinite linear; }
+    .signal-pulse.p2 { animation-delay: 0.73s; }
+    .signal-pulse.p3 { animation-delay: 1.46s; }
+
+    .signal-path-break { flex-grow: 1; height: 2px; background: repeating-linear-gradient(90deg, #ef4444 0, #ef4444 8px, transparent 8px, transparent 16px); margin: 0 20px; position: relative; overflow: visible; animation: brokenTrackFlash 1.5s infinite ease-in-out; }
+    .break-particle { position: absolute; top: 50%; left: 0%; width: 10px; height: 10px; margin-top: -5px; background-color: #f87171; border-radius: 50%; box-shadow: 0 0 10px #ef4444; animation: breakParticleMove 1.8s infinite linear; }
+    .break-particle.p2 { animation-delay: 0.6s; }
+    .break-particle.p3 { animation-delay: 1.2s; }
+    .break-center-badge { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 4px 14px; background-color: #ef4444; color: #ffffff; border-radius: 20px; font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; animation: breakBadgePulse 1.4s infinite ease-in-out; }
+
+    .temp-banner { padding: 12px 24px; border-radius: 12px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; text-align: center; box-shadow: var(--card-glow); user-select: none; }
+    .temp-high-alert { color: #ffffff; animation: cautionFlash 1.2s infinite; border: 1px solid #ef4444; }
+    .temp-critical-alert { color: #ffffff; animation: criticalFlash 0.8s infinite; border: 1px solid #dc2626; }
+    .temp-green-banner { background-color: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-border); }
+    .temp-blue-banner { background-color: var(--blue-bg); color: var(--blue-text); border: 1px solid var(--blue-border); }
+
+    .heartbeat-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: #4ade80;
+      box-shadow: 0 0 6px #4ade80;
+      opacity: 0.35;
+      margin-left: 6px;
+      vertical-align: middle;
+      transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+    }
+    .heartbeat-dot.pulse {
+      transform: scale(1.7);
+      opacity: 1;
+      box-shadow: 0 0 14px #4ade80, 0 0 22px #22c55e;
+    }
+
+    .metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .metric-card { background: var(--card-bg); border: 1px solid var(--card-border); backdrop-filter: blur(12px); border-radius: 16px; padding: 18px 22px; position: relative; overflow: hidden; box-shadow: var(--card-glow); transition: transform 0.2s ease, border-color 0.2s ease; }
+    .metric-card:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.2); }
+    .metric-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; }
+    
+    .metric-card.temp-green::before { background: linear-gradient(90deg, #4ade80, #22c55e); }
+    .metric-card.temp-green .meter-fill { background: linear-gradient(90deg, #4ade80, #22c55e); }
+    .metric-card.temp-blue::before { background: linear-gradient(90deg, #38bdf8, #0284c7); }
+    .metric-card.temp-blue .meter-fill { background: linear-gradient(90deg, #38bdf8, #0284c7); }
+    .metric-card.temp-red::before { background: linear-gradient(90deg, #f87171, #ef4444); }
+    .metric-card.temp-red .meter-fill { background: linear-gradient(90deg, #f87171, #ef4444); }
+
+    .metric-card.hum::before  { background: linear-gradient(90deg, #2dd4bf, #0d9488); }
+    .metric-card.sig::before  { background: linear-gradient(90deg, #818cf8, #4f46e5); }
+    .metric-card.offline::before { background: #ef4444; }
+
+    .card-label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .card-value { font-size: 34px; font-weight: 800; color: #ffffff !important; margin-bottom: 10px; letter-spacing: -0.5px; }
+    .card-sub { font-size: 12px; color: var(--text-secondary); font-weight: normal; }
+
+    .meter-container { width: 100%; height: 6px; background-color: #0f172a; border-radius: 4px; overflow: hidden; }
+    .meter-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+    .metric-card.hum .meter-fill  { background: linear-gradient(90deg, #2dd4bf, #0d9488); }
+    .metric-card.sig .meter-fill  { background: linear-gradient(90deg, #818cf8, #4f46e5); }
+
+    .footer-panel { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px; text-align: center; font-size: 11px; color: var(--text-secondary); font-style: italic; box-shadow: var(--card-glow); }
+
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(11, 17, 32, 0.85); backdrop-filter: blur(8px); z-index: 10000; justify-content: center; align-items: center; padding: 20px; }
+    .modal-overlay.active { display: flex; }
+    .modal-overlay.auth-overlay { z-index: 20000; }
+
+    .modal-card { background: #1e293b; border: 1px solid var(--card-border); border-radius: 20px; width: 100%; max-width: 920px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); overflow: hidden; animation: modalSlide 0.25s ease-out; }
+    @keyframes modalSlide { from { opacity: 0; transform: translateY(20px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+    .modal-header { padding: 18px 24px; border-bottom: 1px solid var(--card-border); display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.6); flex-wrap: wrap; gap: 10px; }
+    .modal-header h2 { margin: 0; font-size: 16px; font-weight: 800; color: #ffffff; display: flex; align-items: center; gap: 10px; letter-spacing: 0.5px; }
+    .modal-close { background: transparent; border: none; color: var(--text-secondary); font-size: 22px; cursor: pointer; line-height: 1; padding: 4px; transition: color 0.2s ease; }
+    .modal-close:hover { color: #ffffff; }
+
+    .modal-body { padding: 0; overflow-y: auto; max-height: 68vh; }
+    .history-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    .history-table th { background: rgba(15, 23, 42, 0.9); color: var(--text-secondary); padding: 12px 20px; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; position: sticky; top: 0; border-bottom: 1px solid var(--card-border); }
+    .history-table td { padding: 12px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); color: var(--text-primary); }
+    .history-table tr:hover { background: rgba(56, 189, 248, 0.05); }
+    
+    .history-badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; }
+    .badge-critical { background: rgba(220, 38, 38, 0.3); color: #fca5a5; border: 1px solid #dc2626; box-shadow: 0 0 8px rgba(220, 38, 38, 0.4); }
+    .badge-high { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+    .badge-normal { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #0284c7; }
+    .badge-optimal { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #22c55e; }
+    .badge-low { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+
+    #audio-unlock-banner { display: none; position: fixed; top: 0; left: 0; right: 0; background: #f59e0b; color: #000; text-align: center; padding: 8px; font-weight: 800; font-size: 12px; letter-spacing: 1px; z-index: 9999; cursor: pointer; text-transform: uppercase; }
+
+    #peakGlassTooltip {
+      display: none;
+      position: fixed;
+      background: rgba(15, 23, 42, 0.96);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(56, 189, 248, 0.6);
+      color: #f8fafc;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 11px;
+      z-index: 99999;
+      pointer-events: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.75);
+      line-height: 1.6;
+      min-width: 240px;
+    }
+  </style>
+</head>
+<body>
+  <div id="audio-unlock-banner">
+    🔊 AUDIO MUTED BY BROWSER — CLICK ANYWHERE ON SCREEN TO ENABLE ALARM SOUNDS
+  </div>
+
+  <div id="peakGlassTooltip"></div>
+
+  <div class="login-wrapper" id="loginView">
+    <a href="https://www.nmdc-energy.com/" target="_blank" class="logo-card" title="Visit NMDC Energy Website">
+      <svg viewBox="0 0 531 170" style="height: 34px; width: auto; display: block;" xmlns="http://www.w3.org/2000/svg">
+        <g fill="#ffffff">
+          <path d="M 0,135 L 0,28 L 18,28 L 64,74 L 64,135 L 46,135 L 23,112 L 23,135 Z" />
+          <path d="M 83,28 L 148,93 L 148,135 L 83,70 Z" />
+          <path d="M 173,105 L 213,65 L 213,135 L 173,135 Z" />
+          <path d="M 238,28 L 288,28 C 325,28 345,45 345,80 C 345,115 325,135 288,135 L 238,135 Z M 267,50 L 267,110 L 284,110 C 307,110 316,98 316,80 C 316,62 307,50 284,50 Z" />
+          <path d="M 450,42 L 428,64 C 420,55 412,50 401,50 C 384,50 372,63 372,80 C 372,97 384,110 401,110 C 412,110 420,105 428,96 L 450,118 C 438,131 421,138 401,138 C 369,138 344,112 344,80 C 344,48 369,22 401,22 C 421,22 438,29 450,42 Z" transform="translate(19, 0)" />
+        </g>
+        <path d="M 148,93 L 213,28 L 213,70 L 148,135 Z" fill="#00a859" />
+        <text x="458" y="162" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="900" font-size="24" fill="#38bdf8" letter-spacing="4" text-anchor="end">ENERGY</text>
+      </svg>
+    </a>
+
+    <div style="text-align:center;">
+      <h2 class="login-title">Real-Time Temperature Monitoring System<span class="login-title-sub">DLS-4200</span></h2>
+      <div class="login-subtitle">Mooring Drive Room</div>
+    </div>
+
+    <div class="input-group">
+      <span class="input-label">Username</span>
+      <input type="text" id="loginUser" class="input-field" value="admin" readonly>
+    </div>
+
+    <div class="input-group">
+      <span class="input-label">Password</span>
+      <input type="password" id="loginPass" class="input-field" placeholder="Enter Password" onkeydown="if(event.key==='Enter') executeLogin()">
+    </div>
+
+    <div id="loginError" class="error-msg">⚠️ Invalid password. Try again.</div>
+
+    <button class="login-btn-submit" onclick="executeLogin()">LOGIN TO DASHBOARD</button>
+
+    <div style="font-size:11px; color:#64748b; font-style:italic; text-align:center;">
+      created by Ribin Balakrishnan 206395
+    </div>
+  </div>
+
+  <div class="dashboard-container link-inactive" id="dashboardView">
+    <div class="header-panel">
+      <a href="https://www.nmdc-energy.com/" target="_blank" class="logo-card" title="Visit NMDC Energy Website">
+        <svg viewBox="0 0 531 170" style="height: 34px; width: auto; display: block;" xmlns="http://www.w3.org/2000/svg">
+          <g fill="#ffffff">
+            <path d="M 0,135 L 0,28 L 18,28 L 64,74 L 64,135 L 46,135 L 23,112 L 23,135 Z" />
+            <path d="M 83,28 L 148,93 L 148,135 L 83,70 Z" />
+            <path d="M 173,105 L 213,65 L 213,135 L 173,135 Z" />
+            <path d="M 238,28 L 288,28 C 325,28 345,45 345,80 C 345,115 325,135 288,135 L 238,135 Z M 267,50 L 267,110 L 284,110 C 307,110 316,98 316,80 C 316,62 307,50 284,50 Z" />
+            <path d="M 450,42 L 428,64 C 420,55 412,50 401,50 C 384,50 372,63 372,80 C 372,97 384,110 401,110 C 412,110 420,105 428,96 L 450,118 C 438,131 421,138 401,138 C 369,138 344,112 344,80 C 344,48 369,22 401,22 C 421,22 438,29 450,42 Z" transform="translate(19, 0)" />
+          </g>
+          <path d="M 148,93 L 213,28 L 213,70 L 148,135 Z" fill="#00a859" />
+          <text x="458" y="162" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="900" font-size="24" fill="#38bdf8" letter-spacing="4" text-anchor="end">ENERGY</text>
+        </svg>
+      </a>
+
+      <div class="header-group">
+        <div class="brand-group">
+          <h1>Real-Time Temperature Monitoring System DLS-4200</h1>
+          <span>Mooring Drive Room</span>
+        </div>
+
+        <div class="time-card">
+          <div class="time-val" id="uae-clock">--:--:--</div>
+          <div class="time-lbl">GST (UTC+4) UAE</div>
+        </div>
+
+        <div class="status-badge status-active show-active">● RADIO LINK ACTIVE</div>
+        <div class="status-badge status-inactive show-inactive" id="statusInactiveBadge">⚠️ CAUTION: SYSTEM OFFLINE</div>
+
+        <button class="night-btn" id="nightModeBtn" onclick="toggleNightMode()" title="Toggle Low-Glare Night Mode">
+          🌙
+        </button>
+
+        <button class="action-btn about-btn" onclick="openAboutModal()" title="About System Information">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          ABOUT
+        </button>
+
+        <a href="https://thingspeak.mathworks.com/channels/3435316/private_show" target="_blank" class="action-btn cloud-btn" title="Open ThingSpeak Cloud Dashboard">
+          <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
+          CLOUD
+        </a>
+
+        <button class="action-btn settings-btn" onclick="openSettingsModal()" title="System Configuration">
+          <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          SETTINGS
+        </button>
+
+        <button class="action-btn alarm-hist-btn" onclick="openAlarmModal()" title="View & Acknowledge Alarm History">
+          <svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+          ALARM HIST
+        </button>
+
+        <button class="action-btn history-btn" onclick="openHistoryModal()" title="View 5-Day Temperature Records">
+          <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 7 7 6.97 6.97 0 0 1-5-2.14l-1.42 1.42A8.95 8.95 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+          5D LOG
+        </button>
+
+        <button class="action-btn restart-btn" onclick="triggerRestart()" title="Reboot System">
+          <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+          RESTART
+        </button>
+
+        <button class="action-btn logout-btn" onclick="executeLogout()" title="Log Out Session">
+          <svg viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+          LOGOUT
+        </button>
+      </div>
+    </div>
+
+    <div class="antenna-panel">
+      <div class="antenna-box">
+        <svg viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12a9.9 9.9 0 0 0 2.3 6.3L2 22l3.7-2.3A9.9 9.9 0 0 0 12 22a10 10 0 0 0 10-10A10 10 0 0 0 12 22zm0 18c-1.8 0-3.5-.5-5-1.4l-.4-.2-2.2 1.4 1.4-2.2-.2-.4C4.5 15.5 4 13.8 4 12a8 8 0 1 1 8 8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span class="antenna-label">TX MOORING DRIVE ROOM</span>
+      </div>
+
+      <div class="signal-path show-active">
+        <div class="signal-pulse"></div>
+        <div class="signal-pulse p2"></div>
+        <div class="signal-pulse p3"></div>
+      </div>
+
+      <div class="signal-path-break show-inactive">
+        <div class="break-particle"></div>
+        <div class="break-particle p2"></div>
+        <div class="break-particle p3"></div>
+        <div class="break-center-badge" id="breakCenterBadge">⚠️ OFFLINE</div>
+      </div>
+
+      <div class="antenna-box">
+        <svg viewBox="0 0 24 24"><path d="M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z"/></svg>
+        <span class="antenna-label">RX SAS WORKSHOP</span>
+      </div>
+    </div>
+
+    <div id="temp-banner" class="temp-banner temp-high-alert" onclick="handleBannerClick()" style="cursor:pointer;" title="Tap to Toggle 1H Alarm Mute">⚠️ CAUTION: SYSTEM OFFLINE — NO DATA</div>
+
+    <div class="metrics-grid">
+      <div id="card-temp" class="metric-card offline">
+        <div class="card-label">
+          <span>Temperature <span id="heartbeatDot" class="heartbeat-dot" title="Live LoRa Telemetry Pulse"></span></span>
+          <span id="tempPeakSub" style="font-size:10px; color:#f87171; font-weight:800; text-transform:none; cursor:pointer; text-decoration:underline;" onmouseenter="showPeakGlassTooltip(event)" onmousemove="movePeakGlassTooltip(event)" onmouseleave="hidePeakGlassTooltip()" onclick="handlePeakClick()">Peak: NO DATA</span>
+        </div>
+        <div id="val-temp" class="card-value">NO DATA</div>
+        <div class="meter-container"><div id="bar-temp" class="meter-fill" style="width: 0%;"></div></div>
+      </div>
+      <div id="card-hum" class="metric-card hum offline">
+        <div class="card-label"><span>Humidity</span><span>% RH</span></div>
+        <div id="val-hum" class="card-value">NO DATA</div>
+        <div class="meter-container"><div id="bar-hum" class="meter-fill" style="width: 0%;"></div></div>
+      </div>
+      <div id="card-sig" class="metric-card sig offline">
+        <div class="card-label"><span>Signal Quality</span><span id="sub-sig" class="card-sub">(OFFLINE)</span></div>
+        <div id="val-sig" class="card-value">OFFLINE</div>
+        <div class="meter-container"><div id="bar-sig" class="meter-fill" style="width: 0%;"></div></div>
+      </div>
+    </div>
+
+    <div class="footer-panel">
+      created by Ribin Balakrishnan 206395
+    </div>
+  </div>
+
+  <!-- PASSWORD PROTECTED RED WARNING MODAL FOR PEAK RESET -->
+  <div class="modal-overlay auth-overlay" id="resetPeakModal">
+    <div class="modal-card" style="max-width:420px; border-color: rgba(239, 68, 68, 0.4);">
+      <div class="modal-header" style="background: rgba(239, 68, 68, 0.18);">
+        <h2 style="color: #f87171; font-size: 15px;">
+          <svg style="width:20px;height:20px;fill:#f87171;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          Reset Peak Tracking
+        </h2>
+        <button class="modal-close" onclick="closeResetPeakModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:22px; display:flex; flex-direction:column; gap:16px;">
+        <div style="font-size:13px; color:var(--text-primary); line-height:1.6;" id="resetPeakDesc">
+          Are you sure you want to reset the persistent peak temperature tracking? This will overwrite the stored peak with the current live reading.
+        </div>
+        
+        <div class="input-group">
+          <span class="input-label">Admin Password</span>
+          <input type="password" id="resetPeakPass" class="input-field" placeholder="Enter Password" onkeydown="if(event.key==='Enter') confirmResetPeak()">
+        </div>
+
+        <div id="resetPeakAuthError" class="error-msg">⚠️ Invalid Password. Access Denied.</div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
+          <button class="action-btn history-btn" onclick="closeResetPeakModal()">CANCEL</button>
+          <button class="action-btn" style="background:#ef4444; color:#ffffff; border-color:#f87171; box-shadow:0 4px 14px rgba(239,68,68,0.4);" onclick="confirmResetPeak()">RESET PEAK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASSWORD PROTECTED MODAL FOR CLEAR 5D LOG -->
+  <div class="modal-overlay auth-overlay" id="clearLogModal">
+    <div class="modal-card" style="max-width:420px; border-color: rgba(239, 68, 68, 0.4);">
+      <div class="modal-header" style="background: rgba(239, 68, 68, 0.18);">
+        <h2 style="color: #f87171; font-size: 15px;">
+          <svg style="width:20px;height:20px;fill:#f87171;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          Clear 5-Day Log History
+        </h2>
+        <button class="modal-close" onclick="closeClearLogModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:22px; display:flex; flex-direction:column; gap:16px;">
+        <div style="font-size:13px; color:var(--text-primary); line-height:1.6;">
+          Are you sure you want to permanently wipe the 5-day temperature history log? Enter admin password to confirm.
+        </div>
+        
+        <div class="input-group">
+          <span class="input-label">Admin Password</span>
+          <input type="password" id="clearLogPass" class="input-field" placeholder="Enter Password" onkeydown="if(event.key==='Enter') confirmClearHistory()">
+        </div>
+
+        <div id="clearLogAuthError" class="error-msg">⚠️ Invalid Password. Access Denied.</div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
+          <button class="action-btn history-btn" onclick="closeClearLogModal()">CANCEL</button>
+          <button class="action-btn" style="background:#ef4444; color:#ffffff; border-color:#f87171; box-shadow:0 4px 14px rgba(239,68,68,0.4);" onclick="confirmClearHistory()">WIPE LOGS</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASSWORD PROTECTED MODAL FOR SYNC TIME -->
+  <div class="modal-overlay auth-overlay" id="syncTimeModal">
+    <div class="modal-card" style="max-width:420px; border-color: rgba(56, 189, 248, 0.4);">
+      <div class="modal-header" style="background: rgba(56, 189, 248, 0.18);">
+        <h2 style="color: #38bdf8; font-size: 15px;">
+          <svg style="width:20px;height:20px;fill:#38bdf8;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          Sync Real-World Time (NTP)
+        </h2>
+        <button class="modal-close" onclick="closeSyncTimeModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:22px; display:flex; flex-direction:column; gap:16px;">
+        <div style="font-size:13px; color:var(--text-primary); line-height:1.6;">
+          Enter admin password to synchronize device real-world NTP time.
+        </div>
+        
+        <div class="input-group">
+          <span class="input-label">Admin Password</span>
+          <input type="password" id="syncTimePass" class="input-field" placeholder="Enter Password" onkeydown="if(event.key==='Enter') confirmSyncTime()">
+        </div>
+
+        <div id="syncTimeAuthError" class="error-msg">⚠️ Invalid Password. Access Denied.</div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
+          <button class="action-btn history-btn" onclick="closeSyncTimeModal()">CANCEL</button>
+          <button class="action-btn sync-btn" onclick="confirmSyncTime()">SYNC TIME</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASSWORD PROTECTED MODAL FOR CLEAR ALARM HISTORY -->
+  <div class="modal-overlay auth-overlay" id="clearAlarmModal">
+    <div class="modal-card" style="max-width:420px; border-color: rgba(239, 68, 68, 0.4);">
+      <div class="modal-header" style="background: rgba(239, 68, 68, 0.18);">
+        <h2 style="color: #f87171; font-size: 15px;">
+          <svg style="width:20px;height:20px;fill:#f87171;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          Clear Alarm History
+        </h2>
+        <button class="modal-close" onclick="closeClearAlarmModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:22px; display:flex; flex-direction:column; gap:16px;">
+        <div style="font-size:13px; color:var(--text-primary); line-height:1.6;">
+          Are you sure you want to permanently delete all alarm history records? Enter admin password to confirm.
+        </div>
+        
+        <div class="input-group">
+          <span class="input-label">Admin Password</span>
+          <input type="password" id="clearAlarmPass" class="input-field" placeholder="Enter Password" onkeydown="if(event.key==='Enter') confirmClearAlarmHistory()">
+        </div>
+
+        <div id="clearAlarmAuthError" class="error-msg">⚠️ Invalid Password. Access Denied.</div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
+          <button class="action-btn history-btn" onclick="closeClearAlarmModal()">CANCEL</button>
+          <button class="action-btn" style="background:#ef4444; color:#ffffff; border-color:#f87171; box-shadow:0 4px 14px rgba(239,68,68,0.4);" onclick="confirmClearAlarmHistory()">WIPE ALARMS</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOUND TEST SELECTION MODAL -->
+  <div class="modal-overlay auth-overlay" id="soundTestSelectModal">
+    <div class="modal-card" style="max-width:400px; border-color: rgba(56, 189, 248, 0.4);">
+      <div class="modal-header" style="background: rgba(56, 189, 248, 0.18);">
+        <h2 style="color: #38bdf8; font-size: 15px;">
+          <svg style="width:20px;height:20px;fill:#38bdf8;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          Select Audio Test Mode
+        </h2>
+        <button class="modal-close" onclick="closeSoundTestSelectModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:22px; display:flex; flex-direction:column; gap:14px;">
+        <div style="font-size:13px; color:var(--text-primary); line-height:1.6;">
+          Choose the type of audio diagnostic test to execute:
+        </div>
+        <button class="action-btn sync-btn" style="justify-content:center; padding:12px; font-weight:800;" onclick="executeSystemSoundTest()">
+          🔊 SYSTEM SOUND TEST
+        </button>
+        <button class="action-btn restart-btn" style="justify-content:center; padding:12px; font-weight:800; background:#ef4444; color:#ffffff; border-color:#f87171;" onclick="promptCriticalAlarmTest()">
+          🚨 CRITICAL ALARM TESTING
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CRITICAL TEST PASSWORD CONFIRMATION MODAL -->
+  <div class="modal-overlay auth-overlay" id="criticalTestAuthModal">
+    <div class="modal-card" style="max-width:420px; border-color: rgba(239, 68, 68, 0.4);">
+      <div class="modal-header" style="background: rgba(239, 68, 68, 0.18);">
+        <h2 style="color: #f87171; font-size: 15px;">
+          <svg style="width:20px;height:20px;fill:#f87171;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          Critical Alarm Test Confirmation
+        </h2>
+        <button class="modal-close" onclick="closeCriticalTestAuthModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:22px; display:flex; flex-direction:column; gap:16px;">
+        <div style="font-size:13px; color:var(--text-primary); line-height:1.6;">
+          ⚠️ <b>Warning:</b> This test will broadcast high-priority audio alerts to all active monitoring displays across the vessel network. Enter admin password to confirm.
+        </div>
+        
+        <div class="input-group">
+          <span class="input-label">Admin Password</span>
+          <input type="password" id="criticalTestPass" class="input-field" placeholder="Enter Password" onkeydown="if(event.key==='Enter') verifyAndExecuteCriticalTest()">
+        </div>
+
+        <div id="criticalTestAuthError" class="error-msg">⚠️ Invalid Password. Access Denied.</div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
+          <button class="action-btn history-btn" onclick="closeCriticalTestAuthModal()">CANCEL</button>
+          <button class="action-btn" style="background:#ef4444; color:#ffffff; border-color:#f87171; box-shadow:0 4px 14px rgba(239,68,68,0.4);" onclick="verifyAndExecuteCriticalTest()">CONFIRM & BROADCAST</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5-DAY LOG HISTORY & TIME-BASED CHART MODAL -->
+  <div class="modal-overlay" id="historyModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>
+          <svg style="width:20px;height:20px;fill:#38bdf8;" viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 7 7 6.97 6.97 0 0 1-5-2.14l-1.42 1.42A8.95 8.95 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+          5 Day Temperature Log
+        </h2>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button class="action-btn history-btn" id="toggleViewBtn" onclick="toggleHistoryView()" title="Switch between Table and Chart view">
+            📈 CHART VIEW
+          </button>
+          <button class="action-btn sync-btn" id="toggleLiveChartBtn" onclick="toggleLiveChartView()" style="display:none;" title="Switch to Live Real-Time Rolling Graph">
+            ⚡ LIVE TREND
+          </button>
+          <button class="action-btn csv-btn" onclick="exportCSV()" title="Download Excel CSV File">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            CSV EXPORT
+          </button>
+          <button class="action-btn sync-btn" onclick="syncDeviceTime()" title="Sync NTP Real-World Time">
+            🔄 SYNC TIME
+          </button>
+          <button class="action-btn restart-btn" onclick="clearHistoryLog()" title="Clear 5-Day Log History Records">
+            🗑 CLEAR 5D LOG
+          </button>
+          <button class="modal-close" onclick="closeHistoryModal()">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <table class="history-table" id="historyTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Time (GST)</th>
+              <th>Temp (&deg;C)</th>
+              <th>Humidity (%)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+          </tbody>
+        </table>
+
+        <div id="chartContainer" style="display:none; padding:20px;">
+          <div style="display:flex; justify-content:space-between; font-size:11px; color:#94a3b8; font-weight:700; margin-bottom:10px;">
+            <span id="chartTitleLabel">5-DAY TIME-BASED TEMPERATURE TREND GRAPH</span>
+            <span style="color:#ef4444;">-- HIGH STATUS LIMIT</span>
+          </div>
+          <div style="position:relative; width:100%; height:280px;">
+            <canvas id="historyCanvas" style="width:100%; height:100%; cursor:crosshair;"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALARM HISTORY & ACKNOWLEDGE MODAL -->
+  <div class="modal-overlay" id="alarmModal">
+    <div class="modal-card" style="max-width:760px;">
+      <div class="modal-header">
+        <h2>
+          <svg style="width:20px;height:20px;fill:#fbbf24;" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+          Alarm History & Acknowledgement
+        </h2>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button class="action-btn sync-btn" id="soundTestBtn" onclick="testAlarmSound()" title="Test Alarm Sound and Animation">
+            🔊 SOUND TEST
+          </button>
+          <button class="action-btn cloud-btn" onclick="acknowledgeAlarms()" title="Acknowledge Active Alarms">
+            ✔ ACKNOWLEDGE
+          </button>
+          <button class="action-btn settings-btn" id="muteBtn" onclick="toggleAlarmMute()" title="Mute or Unmute Alarm Sound">
+            🔇 MUTE 1H
+          </button>
+          <button class="action-btn restart-btn" onclick="clearAlarmHistory()" title="Clear Alarm History Records">
+            🗑 CLEAR
+          </button>
+          <button class="modal-close" onclick="closeAlarmModal()">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Time (GST)</th>
+              <th>Trigger Temp (&deg;C)</th>
+              <th>Threshold (&deg;C)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="alarmTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SYSTEM SETTINGS MODAL -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-card" style="max-width:480px;">
+      <div class="modal-header">
+        <h2>
+          <svg style="width:20px;height:20px;fill:#38bdf8;" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          System Configurations
+        </h2>
+        <button class="modal-close" onclick="closeSettingsModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:22px; display:flex; flex-direction:column; gap:20px;">
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+          <div>
+            <span class="input-label">Alarm Temperature Threshold (&deg;C)</span>
+            <input type="number" step="0.5" id="cfgThreshold" class="input-field" value="27.0" style="margin-top: 6px;">
+          </div>
+          <div>
+            <span class="input-label">High Status Limit Setting (&deg;C)</span>
+            <input type="number" step="0.5" id="cfgHighLimit" class="input-field" value="27.0" style="margin-top: 6px;">
+          </div>
+          <div>
+            <span class="input-label">Calibration Offset (&deg;C)</span>
+            <input type="number" step="0.1" id="cfgOffset" class="input-field" value="0.0" style="margin-top: 6px;">
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 4px;">
+            <span class="input-label" style="margin:0;">Alarm Sound Enabled</span>
+            <input type="checkbox" id="cfgAlarmSound" style="width: 18px; height: 18px; accent-color: #0284c7; cursor: pointer;">
+          </div>
+          <button class="action-btn cloud-btn" style="justify-content:center; padding:12px; font-weight:800;" onclick="saveThreshold()">SAVE SETTINGS</button>
+        </div>
+
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="input-label">Firmware Maintenance</span>
+            <span style="font-size:10px; font-weight:800; color:var(--success-text); background:var(--success-bg); padding:2px 8px; border-radius:10px; border:1px solid var(--success-border);">v4.0.6 Production</span>
+          </div>
+          <button class="action-btn restart-btn" style="width:100%; justify-content: center; padding: 12px; font-size: 12px; font-weight: 800; border-radius: 10px; background: #ef4444; color: #ffffff; border-color: #f87171; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);" onclick="openOtaAuthModal()">
+            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14v-4H8l4-4 4 4h-3v4h-2z"/></svg>
+            FIRMWARE UPDATE
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay auth-overlay" id="threshAuthModal">
+    <div class="modal-card" style="max-width:440px;">
+      <div class="modal-header">
+        <h2>
+          <svg style="width:20px;height:20px;fill:#38bdf8;" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          Settings Save Authorization
+        </h2>
+        <button class="modal-close" onclick="closeThreshAuthModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:22px; display:flex; flex-direction:column; gap:16px;">
+        <div style="font-size:12px; color:var(--text-secondary);">
+          Enter administrator password to update system configurations.
+        </div>
+
+        <div class="input-group">
+          <span class="input-label">Password</span>
+          <input type="password" id="threshPass" class="input-field" placeholder="Enter Password" onkeydown="if(event.key==='Enter') verifyAndSaveThreshold()">
+        </div>
+
+        <div id="threshAuthError" class="error-msg">⚠️ Invalid Password. Access Denied.</div>
+
+        <button class="action-btn cloud-btn" style="justify-content:center; padding:12px; font-size:12px; font-weight:800; border-radius:10px;" onclick="verifyAndSaveThreshold()">
+          SAVE SETTINGS
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay auth-overlay" id="otaAuthModal">
+    <div class="modal-card" style="max-width:440px;">
+      <div class="modal-header">
+        <h2>
+          <svg style="width:20px;height:20px;fill:#ef4444;" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          Firmware Update Authorization
+        </h2>
+        <button class="modal-close" onclick="closeOtaAuthModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:22px; display:flex; flex-direction:column; gap:16px;">
+        <div style="font-size:12px; color:var(--text-secondary);">
+          Enter administrator security credentials to unlock the Web OTA firmware flasher portal.
+        </div>
+
+        <div class="input-group">
+          <span class="input-label">OTA Username</span>
+          <input type="text" id="otaUser" class="input-field" placeholder="Enter OTA Username">
+        </div>
+
+        <div class="input-group">
+          <span class="input-label">OTA Password</span>
+          <input type="password" id="otaPass" class="input-field" placeholder="Enter OTA Password" onkeydown="if(event.key==='Enter') verifyAndLaunchOta()">
+        </div>
+
+        <div id="otaAuthError" class="error-msg">⚠️ Invalid OTA Credentials. Access Denied.</div>
+
+        <button class="action-btn restart-btn" style="justify-content:center; padding:12px; font-size:12px; font-weight:800; border-radius:10px; background:#ef4444; color:#ffffff; border-color:#f87171;" onclick="verifyAndLaunchOta()">
+          UNLOCK & LAUNCH FLASHER
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STACKED PROFESSIONAL ABOUT & SCHEMATIC MODAL -->
+  <div class="modal-overlay" id="aboutModal">
+    <div class="modal-card" style="max-width: 960px;">
+      <div class="modal-header">
+        <h2>
+          <svg style="width:20px;height:20px;fill:#38bdf8;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          System Specifications & Vessel Schematic Architecture
+        </h2>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="action-btn sync-btn" onclick="openManualModal()" title="Open System Manual & Troubleshooting Guide">
+            📖 MANUAL & TROUBLESHOOTING
+          </button>
+          <button class="modal-close" onclick="closeAboutModal()">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+        
+        <!-- Box 1: Vessel Schematic Grid (Top Section) -->
+        <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; box-shadow: inset 0 0 20px rgba(56, 189, 248, 0.05);">
+          <div style="font-size: 13px; font-weight: 900; color: #ffffff; text-transform: uppercase; letter-spacing: 1.5px;">REAL-TIME SCHEMATIC OF WIRELESS TELEMETRY GRID</div>
+          
+          <svg viewBox="0 0 880 300" style="width: 100%; height: auto;" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+              <style>
+                @keyframes radioWave {
+                  0% { r: 5px; opacity: 1; stroke-width: 2px; }
+                  100% { r: 50px; opacity: 0; stroke-width: 0.5px; }
+                }
+                .wave-ring-1 { animation: radioWave 2s infinite linear; }
+                .wave-ring-2 { animation: radioWave 2s infinite linear; animation-delay: 1s; }
+              </style>
+            </defs>
+
+            <!-- Vessel Top-View Outline (Violet/Purple Dashed Line) -->
+            <path d="M 50,110 Q 75,70 130,70 L 720,70 Q 780,70 820,155 Q 780,240 720,240 L 130,240 Q 75,240 50,200 Z" fill="rgba(15, 23, 42, 0.55)" stroke="#a855f7" stroke-width="2.2" stroke-dasharray="6,4"/>
+            
+            <!-- Vessel Title Inside -->
+            <text x="435" y="28" font-family="sans-serif" font-size="12" font-weight="900" fill="#38bdf8" text-anchor="middle" letter-spacing="2">DLS-4200 OFFSHORE CONSTRUCTION VESSEL</text>
+
+            <!-- SEPARATE PARALLEL RF LINKS TO BASE STATION WITH VERTICAL GAP -->
+            <path d="M 107.5,100 L 107.5,85 L 220,85 L 220,135 L 290,135" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="4,4" fill="none"/>
+            <path d="M 167.5,210 L 167.5,225 L 220,225 L 220,175 L 290,175" stroke="#4ade80" stroke-width="2" fill="none" class="active-link-line"/>
+            <path d="M 420,90 L 390,90 L 390,135 L 360,135" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="4,4" fill="none"/>
+            <path d="M 420,155 L 360,155" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="4,4" fill="none"/>
+            <path d="M 420,210 L 390,210 L 390,175 L 360,175" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="4,4" fill="none"/>
+
+            <circle r="3.5" fill="#4ade80" filter="url(#neonGlow)" class="active-pulse">
+              <animateMotion path="M 167.5,210 L 167.5,225 L 220,225 L 220,175 L 290,175" dur="1.4s" repeatCount="indefinite"/>
+            </circle>
+            <circle r="3" fill="#4ade80" opacity="0.7" class="active-pulse">
+              <animateMotion path="M 167.5,210 L 167.5,225 L 220,225 L 220,175 L 290,175" dur="1.4s" begin="0.7s" repeatCount="indefinite"/>
+            </circle>
+
+            <circle cx="167.5" cy="210" r="10" fill="none" stroke="#4ade80" class="wave-ring-1 active-wave" />
+            <circle cx="167.5" cy="210" r="10" fill="none" stroke="#4ade80" class="wave-ring-2 active-wave" />
+
+            <!-- OUTPUT LINKS FROM BASE STATION -->
+            <path d="M 325,190 L 325,232 L 680,232 L 680,190" stroke="#ec4899" stroke-width="2" stroke-dasharray="4,4" fill="none"/>
+            <circle r="3.5" fill="#f472b6" filter="url(#neonGlow)">
+              <animateMotion path="M 325,190 L 325,232 L 680,232 L 680,190" dur="1.8s" repeatCount="indefinite"/>
+            </circle>
+
+            <path d="M 325,120 L 325,58 Q 325,46 340,46 L 748,46 L 748,40" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4,4" fill="none"/>
+            <circle r="3.5" fill="#fbbf24" filter="url(#neonGlow)">
+              <animateMotion path="M 325,120 L 325,58 Q 325,46 340,46 L 748,46 L 748,40" dur="2.2s" repeatCount="indefinite"/>
+            </circle>
+
+            <!-- VESSEL ROOMS & NODES -->
+            <g transform="translate(80, 100)">
+              <rect width="55" height="110" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1" stroke-dasharray="3,2"/>
+              <text x="27.5" y="22" font-family="sans-serif" font-size="7.5" font-weight="900" fill="#38bdf8" text-anchor="middle">AMCLYDE</text>
+              <text x="27.5" y="35" font-family="sans-serif" font-size="7.5" font-weight="900" fill="#38bdf8" text-anchor="middle">CRANE</text>
+              <text x="27.5" y="48" font-family="sans-serif" font-size="7.5" font-weight="900" fill="#38bdf8" text-anchor="middle">DRIVE</text>
+              <text x="27.5" y="61" font-family="sans-serif" font-size="7.5" font-weight="900" fill="#38bdf8" text-anchor="middle">ROOM</text>
+              <line x1="10" y1="73" x2="45" y2="73" stroke="rgba(56,189,248,0.3)" stroke-width="0.8"/>
+              <text x="27.5" y="88" font-family="sans-serif" font-size="6.5" font-weight="800" fill="#64748b" text-anchor="middle">FUTURE</text>
+              <text x="27.5" y="98" font-family="sans-serif" font-size="6.5" font-weight="800" fill="#64748b" text-anchor="middle">EXPANSION</text>
+            </g>
+
+            <g transform="translate(140, 100)">
+              <rect width="55" height="110" rx="6" fill="#1e293b" stroke="#4ade80" stroke-width="1.5" filter="url(#neonGlow)"/>
+              <text x="27.5" y="22" font-family="sans-serif" font-size="7.5" font-weight="900" fill="#4ade80" text-anchor="middle">MOORING</text>
+              <text x="27.5" y="35" font-family="sans-serif" font-size="7.5" font-weight="900" fill="#4ade80" text-anchor="middle">DRIVE</text>
+              <text x="27.5" y="48" font-family="sans-serif" font-size="7.5" font-weight="900" fill="#4ade80" text-anchor="middle">ROOM</text>
+              <line x1="10" y1="62" x2="45" y2="62" stroke="rgba(74,222,128,0.3)" stroke-width="0.8"/>
+              <text x="27.5" y="80" font-family="sans-serif" font-size="7.5" font-weight="900" fill="#4ade80" text-anchor="middle">ACTIVE</text>
+              <text x="27.5" y="92" font-family="sans-serif" font-size="7.5" font-weight="900" fill="#4ade80" text-anchor="middle">NODE</text>
+            </g>
+
+            <g transform="translate(290, 120)">
+              <rect width="70" height="70" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="2" filter="url(#neonGlow)"/>
+              <text x="35" y="22" font-family="sans-serif" font-size="9" font-weight="900" fill="#ffffff" text-anchor="middle">BASE</text>
+              <text x="35" y="34" font-family="sans-serif" font-size="9" font-weight="900" fill="#ffffff" text-anchor="middle">STATION</text>
+              <text x="35" y="48" font-family="sans-serif" font-size="7.5" font-weight="800" fill="#38bdf8" text-anchor="middle">SAS Workshop</text>
+              <text x="35" y="60" font-family="sans-serif" font-size="7" font-weight="800" fill="#4ade80" text-anchor="middle">Receiver Hub</text>
+            </g>
+
+            <g transform="translate(420, 75)">
+              <rect width="145" height="30" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1" stroke-dasharray="3,2"/>
+              <text x="72.5" y="14" font-family="sans-serif" font-size="8" font-weight="900" fill="#38bdf8" text-anchor="middle">SAS PORT DRIVE ROOM</text>
+              <text x="72.5" y="24" font-family="sans-serif" font-size="7" font-weight="800" fill="#64748b" text-anchor="middle">Future Expansion</text>
+            </g>
+
+            <g transform="translate(420, 140)">
+              <rect width="145" height="30" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1" stroke-dasharray="3,2"/>
+              <text x="72.5" y="14" font-family="sans-serif" font-size="8" font-weight="900" fill="#38bdf8" text-anchor="middle">SAS PLC ROOM</text>
+              <text x="72.5" y="24" font-family="sans-serif" font-size="7" font-weight="800" fill="#64748b" text-anchor="middle">Future Expansion</text>
+            </g>
+
+            <g transform="translate(420, 195)">
+              <rect width="145" height="30" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1" stroke-dasharray="3,2"/>
+              <text x="72.5" y="14" font-family="sans-serif" font-size="8" font-weight="900" fill="#38bdf8" text-anchor="middle">SAS STBD DRIVE ROOM</text>
+              <text x="72.5" y="24" font-family="sans-serif" font-size="7" font-weight="800" fill="#64748b" text-anchor="middle">Future Expansion</text>
+            </g>
+
+            <g transform="translate(630, 120)">
+              <rect width="100" height="70" rx="8" fill="#1e293b" stroke="#ec4899" stroke-width="2" filter="url(#neonGlow)"/>
+              <circle cx="26" cy="22" r="4" fill="#f472b6"/>
+              <circle cx="50" cy="22" r="4" fill="#38bdf8"/>
+              <circle cx="74" cy="22" r="4" fill="#f472b6"/>
+              <path d="M 26,26 L 26,35 M 50,26 L 50,35 M 74,26 L 74,35 M 20,35 L 80,35" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round"/>
+              <text x="50" y="50" font-family="sans-serif" font-size="8.5" font-weight="900" fill="#f472b6" text-anchor="middle">LOCAL NETWORK</text>
+              <text x="50" y="61" font-family="sans-serif" font-size="7" font-weight="800" fill="#94a3b8" text-anchor="middle">Multiple Monitors / LAN</text>
+            </g>
+
+            <!-- PERFECTLY FITTED CLOUD API SHAPE -->
+            <g transform="translate(710, 15) scale(1.2)">
+              <path d="M 14,28 Q 7,28 7,20 Q 7,12 16,11 Q 19,3 30,3 Q 40,3 44,11 Q 54,10 56,19 Q 61,28 50,28 Z" fill="#1e293b" stroke="#fbbf24" stroke-width="1.5" filter="url(#neonGlow)"/>
+              <text x="33.5" y="16" font-family="sans-serif" font-size="6.5" font-weight="900" fill="#fbbf24" text-anchor="middle">CLOUD API</text>
+              <text x="33.5" y="23" font-family="sans-serif" font-size="5" font-weight="800" fill="#94a3b8" text-anchor="middle">ThingSpeak</text>
+            </g>
+
+            <!-- LEGEND / KEY PANEL AT BOTTOM RIGHT -->
+            <g transform="translate(480, 244)">
+              <rect width="385" height="54" rx="6" fill="rgba(15, 23, 42, 0.9)" stroke="rgba(56, 189, 248, 0.2)" stroke-width="1"/>
+              
+              <line x1="12" y1="13" x2="35" y2="13" stroke="#4ade80" stroke-width="2"/>
+              <text x="42" y="16" font-family="sans-serif" font-size="7.5" font-weight="700" fill="#94a3b8">Active radio link</text>
+              
+              <line x1="12" y1="27" x2="35" y2="27" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="3,3"/>
+              <text x="42" y="30" font-family="sans-serif" font-size="7.5" font-weight="700" fill="#94a3b8">Future expansion radio links</text>
+              
+              <line x1="12" y1="41" x2="35" y2="41" stroke="#ef4444" stroke-width="1.8"/>
+              <text x="42" y="44" font-family="sans-serif" font-size="7.5" font-weight="700" fill="#94a3b8">Radio link break</text>
+
+              <line x1="205" y1="13" x2="228" y2="13" stroke="#ec4899" stroke-width="1.8" stroke-dasharray="3,3"/>
+              <text x="235" y="16" font-family="sans-serif" font-size="7.5" font-weight="700" fill="#94a3b8">Local packets</text>
+              
+              <line x1="205" y1="27" x2="228" y2="27" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="3,3"/>
+              <text x="235" y="30" font-family="sans-serif" font-size="7.5" font-weight="700" fill="#94a3b8">Cloud link</text>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Box 2: System Specifications (Bottom Section) -->
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; font-size: 13px; line-height: 1.6; color: var(--text-primary); width: 100%; box-sizing: border-box;">
+          <div style="font-size: 12px; font-weight: 900; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">System Parameters</div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 20px;">
+            <div><b>Project:</b> Temperature Data Logger</div>
+            <div><b>Hardware Version:</b> v1.0</div>
+            <div><b>System ID:</b> DLS-4200</div>
+            <div><b>Firmware Version:</b> v4.0.6 (Production Hardened)</div>
+            <div><b>Last Update:</b> 25 Sep 2026, 01:45 AM GST</div>
+            <div><b>Author:</b> Ribin Balakrishnan, Badge no: 206395</div>
+            <div><b>Organization:</b> NMDC Energy</div>
+            <div><b>Monitored Zone:</b> Mooring Drive Room (Transmitter)</div>
+            <div><b>Base Station:</b> SAS Workshop (Receiver)</div>
+            <div><b>Telemetry Link:</b> Sub-GHz Wireless (433 MHz)</div>
+            <div><b>Data Storage:</b> 5-Day Flash Log + Alarm History Matrix</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- SYSTEM MANUAL & TROUBLESHOOTING MODAL -->
+  <div class="modal-overlay" id="manualModal">
+    <div class="modal-card" style="max-width: 820px;">
+      <div class="modal-header">
+        <h2>
+          <svg style="width:20px;height:20px;fill:#38bdf8;" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+          System Manual & Troubleshooting Guide
+        </h2>
+        <button class="modal-close" onclick="closeManualModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 24px; display: flex; flex-direction: column; gap: 20px; font-size: 13px; line-height: 1.6; color: var(--text-primary);">
+        
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px;">
+          <div style="color: #38bdf8; font-weight: 900; font-size: 14px; margin-bottom: 8px; text-transform: uppercase;">1. System Operation Manual</div>
+          <p style="margin: 0 0 10px 0; color: var(--text-secondary);">This is an offshore wireless temperature and humidity logging system designed for continuous 24/7 monitoring of the Mooring Drive Room.</p>
+          <ul style="margin: 0; padding-left: 18px; color: var(--text-primary); display: flex; flex-direction: column; gap: 6px;">
+            <li><b>Telemetry:</b> Receives Sub-GHz LoRa packets (433 MHz) from the transmitter node every few seconds.</li>
+            <li><b>Local Storage:</b> Maintains a 5-day rolling history in LittleFS flash (hourly block-gated writes) and an independent alarm history matrix.</li>
+            <li><b>Cloud Sync:</b> Automatically forwards live sensor metrics to ThingSpeak and Firebase every 60 seconds when Wi-Fi is active.</li>
+            <li><b>Network Provisioning:</b> If the router changes or is offline, the device automatically hosts an open Wi-Fi AP named <code>DLS4200-Config</code>. Connect without a password to configure new credentials at <code>192.168.4.1</code>.</li>
+          </ul>
+        </div>
+
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 16px;">
+          <div style="color: #f87171; font-weight: 900; font-size: 14px; margin-bottom: 8px; text-transform: uppercase;">2. Troubleshooting Tips</div>
+          <ul style="margin: 0; padding-left: 18px; color: var(--text-primary); display: flex; flex-direction: column; gap: 8px;">
+            <li><b>System Crash / Lockup:</b> If a long-running crash occurs, restart the Wi-Fi network and power-cycle both the receiver and transmitter units.</li>
+            <li><b>Radio Link Inactive / No Signal:</b> Verify that the transmitter in the Mooring Drive Room has power and that its antenna is secure. The built-in LoRa watchdog will auto-reset the SPI radio after 2 minutes of silence.</li>
+            <li><b>Audio Alert Muted / No Sound:</b> Modern browsers block autoplay audio by default. Tap the amber warning banner at the top of the screen to unlock the Web Audio API, or use the <b>SOUND TEST</b> button in the Alarm History modal.</li>
+            <li><b>Peak Temperature Reset:</b> Hover to preview peak details; click the peak temperature indicator to speak details and open the password-protected reset modal.</li>
+            <li><b>Time Synchronization:</b> Clearing 5-day logs, syncing device time (with spoken confirmation), and clearing alarm history require admin authorization.</li>
+          </ul>
+        </div>
+
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px; text-align: center; color: var(--text-secondary); font-size: 12px;">
+          For further assistance, feel free to contact the author at <b style="color: #38bdf8;">+91 9497240542</b> or <b style="color: #38bdf8;">ribinbalu@gmail.com</b>.
+        </div>
+
+      </div>
+    </div>
+  </div><script>
+    // =========================================================================
+    // FIREBASE REALTIME DATABASE CONFIGURATION
+    // =========================================================================
+    const FIREBASE_BASE_URL = "https://dls-4200-monitor-default-rtdb.firebaseio.com";
+    const isCloudMode = (window.location.hostname.includes('github.io') || window.location.protocol === 'https:' || window.location.protocol === 'file:');
+
+    let audioCtx = null;
+    let alarmTimeout = null;
+    let currentAlarmType = null;
+    let cachedHistoryData = [];
+    let cachedAlarmData = [];
+    let isAlarmAcknowledgedByServer = false;
+    let isAlarmSoundEnabled = true;
+    let isAlarmMutedByServer = false;
+    let hasNotifiedHighTemp = false;
+    let livePollTimer = null;
+    let currentThreshold = 27.0;
+    let currentHighLimit = 27.0;
+    let currentOffset = 0.0;
+    const criticalLimit = 32.0;
+    let pendingThresholdVal = null;
+    let pendingHighLimitVal = null;
+    let pendingOffsetVal = null;
+    let pendingAlarmEnVal = true;
+    let isChartView = false;
+    let isNightMode = false;
+    let liveTrendData = [];
+    const MAX_LIVE_POINTS = 60;
+    let isLiveTrendView = false;
+    let currentPeakTemp = -999.0;
+    let currentPeakTime = 0;
+    let activeChartData = null;
+    let cachedMaleVoice = null;
+    let lastServerCritTestState = false;
+
+    // Track Firebase heartbeat freshness to detect if ESP8266 is offline
+    let lastFirebaseUpdatedEpoch = 0;
+    let lastFirebaseChangeLocalMs = 0;
+    const OFFLINE_TIMEOUT_SECONDS = 135; // Marks system OFFLINE if ESP8266 misses >2 cloud sync cycles
+
+    const sendCommand = async (localUrl, cmdObject) => {
+      if (!isCloudMode) {
+        return await fetch(localUrl, { method: 'POST' });
+      } else {
+        cmdObject.id = Date.now();
+        return await fetch(FIREBASE_BASE_URL + '/dls4200/commands.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cmdObject)
+        });
+      }
+    };
+
+    const setSystemOfflineUI = (reasonText = "⚠️ CAUTION: SYSTEM OFFLINE — NO DATA") => {
+      const container = document.querySelector('.dashboard-container');
+      const banner = document.getElementById('temp-banner');
+      const cardTemp = document.getElementById('card-temp');
+      const cardHum  = document.getElementById('card-hum');
+      const cardSig  = document.getElementById('card-sig');
+      const statusBadge = document.getElementById('statusInactiveBadge');
+      const breakBadge = document.getElementById('breakCenterBadge');
+
+      if (container) {
+        container.classList.remove('link-active');
+        container.classList.add('link-inactive');
+      }
+      document.body.classList.remove('link-active');
+      document.body.classList.add('link-inactive');
+
+      if (cardTemp) {
+        cardTemp.classList.remove('temp-red', 'temp-blue', 'temp-green');
+        cardTemp.classList.add('offline');
+      }
+      if (cardHum) cardHum.classList.add('offline');
+      if (cardSig) cardSig.classList.add('offline');
+
+      if (banner) {
+        banner.className = 'temp-banner temp-high-alert';
+        banner.innerHTML = reasonText;
+      }
+      if (statusBadge) statusBadge.innerHTML = '⚠️ CAUTION: SYSTEM OFFLINE';
+      if (breakBadge) breakBadge.innerHTML = '⚠️ OFFLINE';
+
+      document.getElementById('val-temp').innerHTML = 'NO DATA';
+      document.getElementById('val-hum').innerText = 'NO DATA';
+      document.getElementById('val-sig').innerText = 'OFFLINE';
+      document.getElementById('sub-sig').innerText = '(OFFLINE)';
+      document.getElementById('tempPeakSub').innerHTML = 'Peak: NO DATA';
+
+      document.getElementById('bar-temp').style.width = '0%';
+      document.getElementById('bar-hum').style.width = '0%';
+      document.getElementById('bar-sig').style.width = '0%';
+
+      currentPeakTemp = -999.0;
+      currentPeakTime = 0;
+      checkAndTriggerAlarm();
+    };
+
+    const executeLogin = () => {
+      const u = document.getElementById('loginUser').value;
+      const p = document.getElementById('loginPass').value;
+      const err = document.getElementById('loginError');
+
+      if (u === 'admin' && p === 'admin') {
+        sessionStorage.setItem('dls_session', 'authenticated');
+        err.style.display = 'none';
+        document.getElementById('loginPass').value = '';
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('dashboardView').style.display = 'flex';
+      } else {
+        err.style.display = 'block';
+      }
+    };
+
+    const executeLogout = () => {
+      sessionStorage.removeItem('dls_session');
+      document.getElementById('dashboardView').style.display = 'none';
+      document.getElementById('loginView').style.display = 'flex';
+    };
+
+    const toggleNightMode = () => {
+      isNightMode = !isNightMode;
+      document.body.classList.toggle('night-mode', isNightMode);
+      const btn = document.getElementById('nightModeBtn');
+      if (btn) btn.innerHTML = isNightMode ? '☀️' : '🌙';
+    };
+
+    const handleBannerClick = () => {
+      const cardTemp = document.getElementById('card-temp');
+      if (cardTemp && cardTemp.classList.contains('temp-red')) {
+        toggleAlarmMute();
+      }
+    };
+
+    const format12HourTimeNoSeconds = (dateObj) => {
+      let hours = dateObj.getHours();
+      const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+    };
+
+    const format12HourTime = (dateObj) => {
+      let hours = dateObj.getHours();
+      const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+      const seconds = String(dateObj.getSeconds()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      return `${String(hours).padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
+    };
+
+    const format12HourShort = (dateObj) => {
+      let hours = dateObj.getHours();
+      const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+    };
+
+    const getIndianMaleVoice = () => {
+      if (cachedMaleVoice) return cachedMaleVoice;
+      if (!('speechSynthesis' in window)) return null;
+      
+      const voices = window.speechSynthesis.getVoices();
+      let selected = voices.find(v => 
+        v.lang.startsWith('en') && 
+        (v.name.toLowerCase().includes('male') || 
+         v.name.includes('Ravi') || 
+         v.name.includes('Rahul') || 
+         v.name.includes('Kumar') || 
+         v.name.includes('Rohan') ||
+         v.name.includes('Prabhat') ||
+         v.name.includes('David') ||
+         v.name.includes('George'))
+      );
+      if (!selected) {
+        selected = voices.find(v => v.lang === 'en-IN' || v.lang === 'en-GB' || v.lang === 'en-US');
+      }
+      cachedMaleVoice = selected || voices[0];
+      return cachedMaleVoice;
+    };
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        cachedMaleVoice = null;
+        getIndianMaleVoice();
+      };
+    }
+
+    const handlePeakClick = () => {
+      hidePeakGlassTooltip();
+      
+      if (currentPeakTemp <= -100) {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance("System is offline or no peak temperature recorded yet.");
+          utterance.lang = 'en-IN';
+          utterance.rate = 1.0;
+          utterance.pitch = 0.95;
+          const voice = getIndianMaleVoice();
+          if (voice) utterance.voice = voice;
+          window.speechSynthesis.speak(utterance);
+        }
+        return;
+      }
+
+      let timeStr = "at device startup";
+      let speechTimeStr = "at device startup";
+      if (currentPeakTime > 0) {
+        let d = new Date(currentPeakTime * 1000);
+        let datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+        let timePartNoSec = format12HourTimeNoSeconds(d);
+        timeStr = `${datePart} at ${timePartNoSec}`;
+        speechTimeStr = `recorded on ${datePart} at ${timePartNoSec}`;
+      }
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const text = `High temperature reaches ${currentPeakTemp.toFixed(1)} degrees Celsius, ${speechTimeStr}.`;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-IN';
+        utterance.rate = 1.0;
+        utterance.pitch = 0.95;
+        const voice = getIndianMaleVoice();
+        if (voice) utterance.voice = voice;
+        window.speechSynthesis.speak(utterance);
+      }
+
+      const msgEl = document.getElementById('resetPeakDesc');
+      if (msgEl) {
+        msgEl.innerHTML = `Are you sure you want to reset the persistent peak temperature tracking?<br><br><b>Recorded Peak:</b> <span style="color:#f87171;">${currentPeakTemp.toFixed(1)} °C</span><br><b>Time:</b> ${timeStr}<br><br>This will overwrite the stored peak with the current live reading.`;
+      }
+
+      document.getElementById('resetPeakPass').value = '';
+      document.getElementById('resetPeakAuthError').style.display = 'none';
+      document.getElementById('resetPeakModal').classList.add('active');
+    };
+
+    const showPeakGlassTooltip = (e) => {
+      if (currentPeakTemp === -999.0 || currentPeakTemp <= -100) return;
+      let timeStr = "Device Startup / Unknown";
+      if (currentPeakTime > 0) {
+        let d = new Date(currentPeakTime * 1000);
+        let datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        timeStr = `${datePart}, ${format12HourTimeNoSeconds(d)} GST`;
+      }
+      const box = document.getElementById('peakGlassTooltip');
+      if (box) {
+        box.innerHTML = `<span style="color:#38bdf8; font-weight:800; font-size:11px;">PEAK TEMPERATURE</span><br>
+                         Temp: <span style="color:#f87171; font-weight:800;">${currentPeakTemp.toFixed(1)} °C</span><br>
+                         Time: <span style="color:#e2e8f0;">${timeStr}</span><br>
+                         <div style="margin-top:6px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.12); font-size:10px; color:#38bdf8;">ℹ️ Click to speak peak & reset</div>`;
+        box.style.display = 'block';
+        movePeakGlassTooltip(e);
+      }
+    };
+
+    const movePeakGlassTooltip = (e) => {
+      const box = document.getElementById('peakGlassTooltip');
+      if (box && box.style.display === 'block') {
+        const w = window.innerWidth;
+        let left = e.clientX + 16;
+        let top = e.clientY - 35;
+        if (left + 280 > w) left = e.clientX - 295;
+        if (top < 10) top = e.clientY + 15;
+        box.style.left = left + 'px';
+        box.style.top = top + 'px';
+      }
+    };
+
+    const hidePeakGlassTooltip = () => {
+      const box = document.getElementById('peakGlassTooltip');
+      if (box) box.style.display = 'none';
+    };
+
+    const closeResetPeakModal = () => {
+      document.getElementById('resetPeakModal').classList.remove('active');
+    };
+
+    const confirmResetPeak = async () => {
+      const pass = document.getElementById('resetPeakPass').value.trim();
+      const errEl = document.getElementById('resetPeakAuthError');
+
+      if (pass !== 'admin') {
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+      closeResetPeakModal();
+
+      try {
+        const res = await sendCommand('/api/reset-peak?pass=' + encodeURIComponent(pass), { action: 'reset_peak' });
+        if (res.ok) {
+          alert(isCloudMode ? "Peak reset command queued to cloud! Will execute on next sync." : "Peak temperature reset!");
+          fetchLiveData();
+        } else {
+          alert("Unauthorized: Incorrect admin password.");
+        }
+      } catch(e) {
+        alert("Network error resetting peak.");
+      }
+    };
+
+    const clearHistoryLog = () => {
+      document.getElementById('clearLogPass').value = '';
+      document.getElementById('clearLogAuthError').style.display = 'none';
+      document.getElementById('clearLogModal').classList.add('active');
+    };
+
+    const closeClearLogModal = () => {
+      document.getElementById('clearLogModal').classList.remove('active');
+    };
+
+    const confirmClearHistory = async () => {
+      const pass = document.getElementById('clearLogPass').value.trim();
+      const errEl = document.getElementById('clearLogAuthError');
+
+      if (pass !== 'admin') {
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+      closeClearLogModal();
+
+      try {
+        const res = await sendCommand('/api/clear-history?pass=' + encodeURIComponent(pass), { action: 'clear_history' });
+        if (res.ok) {
+          if (isCloudMode) {
+            await fetch(FIREBASE_BASE_URL + '/dls4200/history.json', { method: 'DELETE' });
+          }
+          alert("5-day history log cleared successfully.");
+          openHistoryModal();
+        } else {
+          alert("Unauthorized or failed to clear history log.");
+        }
+      } catch(e) {
+        alert("Network error clearing history log.");
+      }
+    };
+
+    const syncDeviceTime = () => {
+      document.getElementById('syncTimePass').value = '';
+      document.getElementById('syncTimeAuthError').style.display = 'none';
+      document.getElementById('syncTimeModal').classList.add('active');
+    };
+
+    const closeSyncTimeModal = () => {
+      document.getElementById('syncTimeModal').classList.remove('active');
+    };
+
+    const confirmSyncTime = async () => {
+      const pass = document.getElementById('syncTimePass').value.trim();
+      const errEl = document.getElementById('syncTimeAuthError');
+
+      if (pass !== 'admin') {
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+      closeSyncTimeModal();
+
+      try {
+        const res = await sendCommand('/api/sync-time?pass=' + encodeURIComponent(pass), { action: 'sync_time' });
+        if (res.ok) {
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance("Time sync successful.");
+            utterance.lang = 'en-IN';
+            utterance.rate = 1.0;
+            utterance.pitch = 0.95;
+            const voice = getIndianMaleVoice();
+            if (voice) utterance.voice = voice;
+            window.speechSynthesis.speak(utterance);
+          }
+          alert("NTP Real-World Time synchronization command sent!");
+          openHistoryModal();
+        } else {
+          alert("Time sync failed. Unauthorized or network error.");
+        }
+      } catch(e) {
+        alert("Network error communicating with device.");
+      }
+    };
+
+    const clearAlarmHistory = () => {
+      document.getElementById('clearAlarmPass').value = '';
+      document.getElementById('clearAlarmAuthError').style.display = 'none';
+      document.getElementById('clearAlarmModal').classList.add('active');
+    };
+
+    const closeClearAlarmModal = () => {
+      document.getElementById('clearAlarmModal').classList.remove('active');
+    };
+
+    const confirmClearAlarmHistory = async () => {
+      const pass = document.getElementById('clearAlarmPass').value.trim();
+      const errEl = document.getElementById('clearAlarmAuthError');
+
+      if (pass !== 'admin') {
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+      closeClearAlarmModal();
+
+      try {
+        const res = await sendCommand('/api/clear-alarms?pass=' + encodeURIComponent(pass), { action: 'clear_alarms' });
+        if (res.ok) {
+          if (isCloudMode) {
+            await fetch(FIREBASE_BASE_URL + '/dls4200/alarms.json', { method: 'DELETE' });
+          }
+          alert("Alarm history wiped clean.");
+          openAlarmModal();
+          fetchLiveData();
+        } else {
+          alert("Unauthorized or failed to clear alarms.");
+        }
+      } catch(e) {
+        alert("Network error clearing alarm history.");
+      }
+    };
+
+    const playBeepSequence = (count, onFinished) => {
+      try {
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') ctx.resume();
+        
+        let beepCount = 0;
+        const playSingleBeep = () => {
+          if (beepCount >= count) {
+            if (onFinished) onFinished();
+            return;
+          }
+          const osc1 = ctx.createOscillator();
+          const osc2 = ctx.createOscillator();
+          const gain = ctx.createGain();
+          
+          osc1.type = 'sawtooth';
+          osc2.type = 'sine';
+          osc1.frequency.setValueAtTime(880, ctx.currentTime);
+          osc2.frequency.setValueAtTime(1174.66, ctx.currentTime);
+          
+          gain.gain.setValueAtTime(0.15, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+          
+          osc1.connect(gain);
+          osc2.connect(gain);
+          gain.connect(ctx.destination);
+          
+          osc1.start();
+          osc2.start();
+          osc1.stop(ctx.currentTime + 0.2);
+          osc2.stop(ctx.currentTime + 0.2);
+          
+          beepCount++;
+          if (beepCount < count) {
+            setTimeout(playSingleBeep, 300);
+          } else {
+            setTimeout(() => {
+              if (onFinished) onFinished();
+            }, 300);
+          }
+        };
+        playSingleBeep();
+      } catch(e) {
+        if (onFinished) onFinished();
+      }
+    };
+
+    const runAlarmLoop = (isCritical) => {
+      if (!isAlarmSoundEnabled || isAlarmMutedByServer || !currentAlarmType) return;
+      try {
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') {
+          document.getElementById('audio-unlock-banner').style.display = 'block';
+          return;
+        } else {
+          document.getElementById('audio-unlock-banner').style.display = 'none';
+        }
+
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const text = isCritical 
+            ? "Critical warning, temperature has reached an extreme level in the mooring drive room. Immediate action required."
+            : "Warning, temperature is rising high in the mooring drive room. Please check.";
+          
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'en-IN';
+          utterance.rate = 1.0;
+          utterance.pitch = 0.95;
+          const voice = getIndianMaleVoice();
+          if (voice) utterance.voice = voice;
+          
+          utterance.onend = () => {
+            playBeepSequence(6, () => {
+              if (currentAlarmType && !isAlarmMutedByServer && isAlarmSoundEnabled) {
+                alarmTimeout = setTimeout(() => {
+                  runAlarmLoop(isCritical);
+                }, 2000);
+              }
+            });
+          };
+
+          window.speechSynthesis.speak(utterance);
+        } else {
+          playBeepSequence(6, () => {
+            if (currentAlarmType && !isAlarmMutedByServer && isAlarmSoundEnabled) {
+              alarmTimeout = setTimeout(() => {
+                runAlarmLoop(isCritical);
+              }, 2000);
+            }
+          });
+        }
+      } catch(e) {
+        if (currentAlarmType && !isAlarmMutedByServer && isAlarmSoundEnabled) {
+          alarmTimeout = setTimeout(() => {
+            runAlarmLoop(isCritical);
+          }, 2000);
+        }
+      }
+    };
+
+    const testAlarmSound = () => {
+      document.getElementById('soundTestSelectModal').classList.add('active');
+    };
+
+    const closeSoundTestSelectModal = () => {
+      document.getElementById('soundTestSelectModal').classList.remove('active');
+    };
+
+    const executeSystemSoundTest = () => {
+      const btn = document.getElementById('soundTestBtn');
+      if (btn) btn.classList.add('testing-active');
+      
+      try {
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') ctx.resume();
+        
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance("System audio test. Audio output and speech synthesis are operating normally.");
+          utterance.lang = 'en-IN';
+          utterance.rate = 1.0;
+          utterance.pitch = 0.95;
+          const voice = getIndianMaleVoice();
+          if (voice) utterance.voice = voice;
+          
+          utterance.onend = () => {
+            playBeepSequence(6, () => {
+              if (btn) btn.classList.remove('testing-active');
+              closeSoundTestSelectModal();
+            });
+          };
+          window.speechSynthesis.speak(utterance);
+        } else {
+          playBeepSequence(6, () => {
+            if (btn) btn.classList.remove('testing-active');
+            closeSoundTestSelectModal();
+          });
+        }
+      } catch(e) {
+        alert("Speech synthesis blocked or unsupported.");
+        if (btn) btn.classList.remove('testing-active');
+        closeSoundTestSelectModal();
+      }
+    };
+
+    const promptCriticalAlarmTest = () => {
+      closeSoundTestSelectModal();
+      document.getElementById('criticalTestPass').value = '';
+      document.getElementById('criticalTestAuthError').style.display = 'none';
+      document.getElementById('criticalTestAuthModal').classList.add('active');
+    };
+
+    const closeCriticalTestAuthModal = () => {
+      document.getElementById('criticalTestAuthModal').classList.remove('active');
+    };
+
+    const verifyAndExecuteCriticalTest = async () => {
+      const pass = document.getElementById('criticalTestPass').value.trim();
+      const errEl = document.getElementById('criticalTestAuthError');
+
+      if (pass !== 'admin') {
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+      closeCriticalTestAuthModal();
+
+      try {
+        const res = await sendCommand('/api/trigger-critical-test?pass=' + encodeURIComponent(pass), { action: 'crit_test' });
+        if (res.ok) {
+          if (isCloudMode) runCriticalAlarmTestSequence();
+        } else {
+          alert("Critical test authorization failed.");
+        }
+      } catch(e) {
+        alert("Network error triggering critical test.");
+      }
+    };
+
+    const runCriticalAlarmTestSequence = () => {
+      try {
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') ctx.resume();
+        
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance("Critical alarm simulation. Extreme temperature alert broadcasting to all active monitoring nodes across the vessel network.");
+          utterance.lang = 'en-IN';
+          utterance.rate = 1.0;
+          utterance.pitch = 0.90;
+          const voice = getIndianMaleVoice();
+          if (voice) utterance.voice = voice;
+          
+          utterance.onend = () => {
+            playBeepSequence(10, null);
+          };
+          window.speechSynthesis.speak(utterance);
+        } else {
+          playBeepSequence(10, null);
+        }
+      } catch(e) {
+        alert("Speech synthesis blocked or unsupported.");
+      }
+    };
+
+    const openSettingsModal = () => {
+      document.getElementById('cfgThreshold').value = currentThreshold.toFixed(1);
+      document.getElementById('cfgHighLimit').value = currentHighLimit.toFixed(1);
+      document.getElementById('cfgOffset').value = currentOffset.toFixed(1);
+      document.getElementById('cfgAlarmSound').checked = isAlarmSoundEnabled;
+      document.getElementById('settingsModal').classList.add('active');
+    };
+
+    const closeSettingsModal = () => {
+      document.getElementById('settingsModal').classList.remove('active');
+    };
+
+    const saveThreshold = () => {
+      const val = parseFloat(document.getElementById('cfgThreshold').value);
+      const highLimitVal = parseFloat(document.getElementById('cfgHighLimit').value);
+      const offsetVal = parseFloat(document.getElementById('cfgOffset').value);
+      const alarmEnVal = document.getElementById('cfgAlarmSound').checked;
+      if (isNaN(val) || val < 0 || val > 80 || isNaN(highLimitVal) || highLimitVal < 0 || highLimitVal > 80 || isNaN(offsetVal) || offsetVal < -10 || offsetVal > 10) {
+        alert("Please enter valid temperature values.");
+        return;
+      }
+      pendingThresholdVal = val;
+      pendingHighLimitVal = highLimitVal;
+      pendingOffsetVal = offsetVal;
+      pendingAlarmEnVal = alarmEnVal;
+      openThreshAuthModal();
+    };
+
+    const openThreshAuthModal = () => {
+      document.getElementById('threshPass').value = '';
+      document.getElementById('threshAuthError').style.display = 'none';
+      closeSettingsModal();
+      document.getElementById('threshAuthModal').classList.add('active');
+    };
+
+    const closeThreshAuthModal = () => {
+      document.getElementById('threshAuthModal').classList.remove('active');
+    };
+
+    const verifyAndSaveThreshold = async () => {
+      const p = document.getElementById('threshPass').value.trim();
+      const err = document.getElementById('threshAuthError');
+
+      if (!p) {
+        err.innerText = "⚠️ Password required.";
+        err.style.display = 'block';
+        return;
+      }
+
+      if (p !== 'admin') {
+        err.innerText = "⚠️ Invalid Password. Access Denied.";
+        err.style.display = 'block';
+        return;
+      }
+
+      err.style.display = 'none';
+
+      try {
+        const localUrl = '/api/set-threshold?val=' + pendingThresholdVal + '&high_limit=' + pendingHighLimitVal + '&offset=' + pendingOffsetVal + '&alarm_en=' + pendingAlarmEnVal + '&pass=' + encodeURIComponent(p);
+        const res = await sendCommand(localUrl, {
+          action: 'set_settings',
+          threshold: pendingThresholdVal,
+          highLimit: pendingHighLimitVal,
+          offset: pendingOffsetVal,
+          alarmEn: pendingAlarmEnVal
+        });
+        if (res.ok) {
+          alert("Settings successfully updated!");
+          currentThreshold = pendingThresholdVal;
+          currentHighLimit = pendingHighLimitVal;
+          currentOffset = pendingOffsetVal;
+          isAlarmSoundEnabled = pendingAlarmEnVal;
+          closeThreshAuthModal();
+          fetchLiveData();
+        } else {
+          err.innerText = "⚠️ Unauthorized or invalid password.";
+          err.style.display = 'block';
+        }
+      } catch(e) {
+        err.innerText = "⚠️ Network error saving settings.";
+        err.style.display = 'block';
+      }
+    };
+
+    const openOtaAuthModal = () => {
+      if (isCloudMode) {
+        alert("Web OTA Firmware Flashing requires a direct Local Wi-Fi connection to the receiver IP (http://device-ip/update).");
+        return;
+      }
+      document.getElementById('otaUser').value = '';
+      document.getElementById('otaPass').value = '';
+      document.getElementById('otaAuthError').style.display = 'none';
+      closeSettingsModal();
+      document.getElementById('otaAuthModal').classList.add('active');
+    };
+
+    const closeOtaAuthModal = () => {
+      document.getElementById('otaAuthModal').classList.remove('active');
+    };
+
+    const verifyAndLaunchOta = async () => {
+      const u = document.getElementById('otaUser').value.trim();
+      const p = document.getElementById('otaPass').value.trim();
+      const err = document.getElementById('otaAuthError');
+
+      if (!u || !p) {
+        err.innerText = "⚠️ Username and Password required.";
+        err.style.display = 'block';
+        return;
+      }
+
+      err.style.display = 'none';
+
+      try {
+        const credentials = btoa(u + ':' + p);
+        const res = await fetch('/update', {
+          headers: {
+            'Authorization': 'Basic ' + credentials
+          }
+        });
+
+        if (res.status === 200) {
+          closeOtaAuthModal();
+          window.open('/update', '_blank');
+        } else {
+          err.innerText = "⚠️ Invalid OTA Credentials. Access Denied.";
+          err.style.display = 'block';
+        }
+      } catch(e) {
+        err.innerText = "⚠️ Network error authenticating OTA.";
+        err.style.display = 'block';
+      }
+    };
+
+    const openAboutModal = () => {
+      document.getElementById('aboutModal').classList.add('active');
+    };
+
+    const closeAboutModal = () => {
+      document.getElementById('aboutModal').classList.remove('active');
+    };
+
+    const openManualModal = () => {
+      document.getElementById('manualModal').classList.add('active');
+    };
+
+    const closeManualModal = () => {
+      document.getElementById('manualModal').classList.remove('active');
+    };
+
+    const openAlarmModal = async () => {
+      const tbody = document.getElementById('alarmTableBody');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">Loading alarm records...</td></tr>';
+      }
+      document.getElementById('alarmModal').classList.add('active');
+
+      try {
+        const url = isCloudMode ? (FIREBASE_BASE_URL + '/dls4200/alarms.json') : '/api/alarm-history';
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json();
+        renderAlarmTable(data || []);
+      } catch(e) {
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#f87171; padding:20px;">Offline — Unable to load alarm history.</td></tr>';
+        }
+      }
+    };
+
+    const closeAlarmModal = () => {
+      document.getElementById('alarmModal').classList.remove('active');
+    };
+
+    const renderAlarmTable = (data) => {
+      cachedAlarmData = (data || []).filter(Boolean);
+      const tbody = document.getElementById('alarmTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (cachedAlarmData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">No alarm records captured. Monitoring system normal.</td></tr>';
+        return;
+      }
+
+      cachedAlarmData.forEach(item => {
+        const timePoint = new Date(item.epoch * 1000);
+        const dateStr = timePoint.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        const timeStr = format12HourShort(timePoint);
+
+        let badgeClass = item.ack ? 'badge-optimal' : 'badge-high';
+        let statusText = item.ack ? 'ACKNOWLEDGED' : 'ACTIVE ALARM';
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td style="color:var(--text-secondary); font-weight:700;">${dateStr}</td>
+          <td><b>${timeStr}</b></td>
+          <td style="color:#f87171; font-weight:800;">${Number(item.temp).toFixed(1)} °C</td>
+          <td style="color:#38bdf8;">${Number(item.threshold).toFixed(1)} °C</td>
+          <td><span class="history-badge ${badgeClass}">${statusText}</span></td>
+        `;
+        tbody.appendChild(row);
+      });
+    };
+
+    const acknowledgeAlarms = async () => {
+      try {
+        const res = await sendCommand('/api/ack-alarm', { action: 'ack_alarm' });
+        if (res.ok) {
+          isAlarmAcknowledgedByServer = true;
+          checkAndTriggerAlarm();
+          alert("Alarms acknowledged! Active audible alerts silenced.");
+          openAlarmModal();
+        }
+      } catch(e) {
+        alert("Failed to acknowledge alarms.");
+      }
+    };
+
+    const toggleAlarmMute = async () => {
+      try {
+        const res = await sendCommand('/api/mute-alarm', { action: 'mute_alarm' });
+        if (res.ok) {
+          if (isCloudMode) {
+            isAlarmMutedByServer = !isAlarmMutedByServer;
+          } else {
+            const data = await res.json();
+            isAlarmMutedByServer = data.muted;
+          }
+          
+          if (alarmTimeout) {
+            clearTimeout(alarmTimeout);
+            alarmTimeout = null;
+          }
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const msg = isAlarmMutedByServer ? "Alarm muted for one hour." : "Alarm unmuted.";
+            const utterance = new SpeechSynthesisUtterance(msg);
+            utterance.lang = 'en-IN';
+            utterance.rate = 1.0;
+            utterance.pitch = 0.95;
+            const voice = getIndianMaleVoice();
+            if (voice) utterance.voice = voice;
+            window.speechSynthesis.speak(utterance);
+          }
+
+          checkAndTriggerAlarm();
+          fetchLiveData();
+        }
+      } catch(e) {
+        alert("Failed to toggle alarm mute state.");
+      }
+    };
+
+    const toggleHistoryView = () => {
+      isChartView = !isChartView;
+      const t = document.getElementById('historyTable');
+      const c = document.getElementById('chartContainer');
+      const b = document.getElementById('toggleViewBtn');
+      const liveBtn = document.getElementById('toggleLiveChartBtn');
+
+      if (isChartView) {
+        t.style.display = 'none';
+        c.style.display = 'block';
+        b.innerText = '📋 TABLE VIEW';
+        liveBtn.style.display = 'inline-flex';
+        isLiveTrendView = false;
+        liveBtn.innerText = '⚡ LIVE TREND';
+        document.getElementById('chartTitleLabel').innerText = '5-DAY TIME-BASED TEMPERATURE TREND GRAPH';
+        activeChartData = cachedHistoryData;
+        drawCanvasChart(cachedHistoryData);
+      } else {
+        t.style.display = 'table';
+        c.style.display = 'none';
+        b.innerText = '📈 CHART VIEW';
+        liveBtn.style.display = 'none';
+        isLiveTrendView = false;
+      }
+    };
+
+    const toggleLiveChartView = () => {
+      isLiveTrendView = !isLiveTrendView;
+      const liveBtn = document.getElementById('toggleLiveChartBtn');
+      const titleLbl = document.getElementById('chartTitleLabel');
+      if (isLiveTrendView) {
+        liveBtn.innerText = '📊 5D HISTORICAL';
+        titleLbl.innerText = 'REAL-TIME ROLLING TEMPERATURE TREND (SECONDS)';
+        activeChartData = liveTrendData;
+        drawCanvasChart(liveTrendData);
+      } else {
+        liveBtn.innerText = '⚡ LIVE TREND';
+        titleLbl.innerText = '5-DAY TIME-BASED TEMPERATURE TREND GRAPH';
+        activeChartData = cachedHistoryData;
+        drawCanvasChart(cachedHistoryData);
+      }
+    };
+
+    const drawCanvasChart = (data, hoverIdx = -1) => {
+      activeChartData = data;
+      const canvas = document.getElementById('historyCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = 280;
+
+      const w = canvas.width, h = canvas.height;
+      const padLeft = 55, padBottom = 40, padTop = 20, padRight = 20;
+
+      ctx.clearRect(0, 0, w, h);
+
+      if (!data || data.length === 0) {
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('No history data available to render chart.', padLeft, h / 2);
+        return;
+      }
+
+      const reversed = isLiveTrendView ? data : [...data].reverse();
+      const temps = reversed.map(d => d.temp);
+      const minT = Math.floor(Math.min(...temps, currentHighLimit) - 2);
+      const maxT = Math.ceil(Math.max(...temps, currentHighLimit) + 2);
+
+      const getX = i => padLeft + (i / Math.max(reversed.length - 1, 1)) * (w - padLeft - padRight);
+      const getY = val => h - padBottom - ((val - minT) / (maxT - minT)) * (h - padTop - padBottom);
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '10px sans-serif';
+
+      for (let i = 0; i <= 4; i++) {
+        let val = minT + ((maxT - minT) / 4) * i;
+        let y = getY(val);
+        ctx.beginPath(); ctx.moveTo(padLeft, y); ctx.lineTo(w - padRight, y); ctx.stroke();
+        ctx.fillText(val.toFixed(1) + '°C', 6, y + 3);
+      }
+
+      const tickStep = Math.max(1, Math.floor(reversed.length / 5));
+      for (let i = 0; i < reversed.length; i += tickStep) {
+        let x = getX(i);
+        let timePoint = new Date(reversed[i].epoch * 1000);
+        let dateStr = timePoint.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        let timeStr = format12HourTime(timePoint);
+
+        ctx.beginPath(); ctx.moveTo(x, padTop); ctx.lineTo(x, h - padBottom); ctx.stroke();
+        if (!isLiveTrendView) {
+          ctx.fillText(dateStr, x - 18, h - padBottom + 14);
+        }
+        ctx.fillText(timeStr, x - 26, h - padBottom + (isLiveTrendView ? 16 : 26));
+      }
+
+      let limitY = getY(currentHighLimit);
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(padLeft, limitY); ctx.lineTo(w - padRight, limitY); ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      reversed.forEach((d, i) => {
+        let x = getX(i), y = getY(d.temp);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      reversed.forEach((d, i) => {
+        let x = getX(i), y = getY(d.temp);
+        ctx.fillStyle = d.temp >= criticalLimit ? '#dc2626' : (d.temp >= currentHighLimit ? '#f87171' : '#4ade80');
+        ctx.beginPath(); ctx.arc(x, y, (i === hoverIdx ? 5.5 : 3.5), 0, Math.PI * 2); ctx.fill();
+      });
+
+      if (hoverIdx >= 0 && hoverIdx < reversed.length) {
+        const pt = reversed[hoverIdx];
+        const hX = getX(hoverIdx);
+        const hY = getY(pt.temp);
+
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(hX, padTop); ctx.lineTo(hX, h - padBottom); ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(hX, hY, 7, 0, Math.PI * 2); ctx.stroke();
+
+        const timePoint = new Date(pt.epoch * 1000);
+        const timeStr = timePoint.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' ' + format12HourTime(timePoint);
+        const boxW = 165;
+        const boxH = 55;
+        let boxX = hX + 12;
+        let boxY = hY - boxH / 2;
+        if (boxX + boxW > w - padRight) boxX = hX - boxW - 12;
+        if (boxY < padTop) boxY = padTop;
+        if (boxY + boxH > h - padBottom) boxY = h - padBottom - boxH;
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxW, boxH, 6);
+        else ctx.rect(boxX, boxY, boxW, boxH);
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText(timeStr, boxX + 8, boxY + 16);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(`Temp: ${Number(pt.temp).toFixed(1)} °C`, boxX + 8, boxY + 32);
+        ctx.fillStyle = '#2dd4bf';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(`Hum: ${Number(pt.hum).toFixed(1)} %`, boxX + 8, boxY + 47);
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const peakSubEl = document.getElementById('tempPeakSub');
+      if (peakSubEl) {
+        peakSubEl.removeAttribute('title');
+      }
+
+      const canvas = document.getElementById('historyCanvas');
+      if (canvas) {
+        canvas.addEventListener('mousemove', (e) => {
+          if (!activeChartData || activeChartData.length === 0) return;
+          const rect = canvas.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const w = canvas.width;
+          const padLeft = 55, padRight = 20;
+          const reversed = isLiveTrendView ? activeChartData : [...activeChartData].reverse();
+          const getX = i => padLeft + (i / Math.max(reversed.length - 1, 1)) * (w - padLeft - padRight);
+
+          let closestIdx = 0;
+          let minDist = 999999;
+          for (let i = 0; i < reversed.length; i++) {
+            let dist = Math.abs(getX(i) - mouseX);
+            if (dist < minDist) {
+              minDist = dist;
+              closestIdx = i;
+            }
+          }
+          drawCanvasChart(activeChartData, closestIdx);
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+          if (activeChartData) drawCanvasChart(activeChartData, -1);
+        });
+      }
+    });
+
+    const renderHistoryTable = (genuineData) => {
+      cachedHistoryData = (genuineData || []).filter(Boolean);
+      const tbody = document.getElementById('historyTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      
+      if (cachedHistoryData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">No genuine logged records yet. Collecting radio link data...</td></tr>';
+        return;
+      }
+
+      cachedHistoryData.forEach(item => {
+        const timePoint = new Date(item.epoch * 1000);
+        const dateStr = timePoint.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        
+        let hours = timePoint.getHours();
+        let ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12; hours = hours ? hours : 12;
+        const timeStr = `${String(hours).padStart(2, '0')}:00 ${ampm}`;
+        
+        let badgeClass = 'badge-optimal';
+        let statusText = 'OPTIMAL';
+
+        if (item.temp >= criticalLimit) {
+          badgeClass = 'badge-critical';
+          statusText = 'CRITICAL HIGH';
+        } else if (item.temp >= currentHighLimit) {
+          badgeClass = 'badge-high';
+          statusText = 'HIGH';
+        } else if (item.temp >= 24.0) {
+          badgeClass = 'badge-normal';
+          statusText = 'NORMAL';
+        } else if (item.temp >= 18.0) {
+          badgeClass = 'badge-optimal';
+          statusText = 'OPTIMAL';
+        } else {
+          badgeClass = 'badge-low';
+          statusText = 'LOW';
+        }
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td style="color:var(--text-secondary); font-weight:700;">${dateStr}</td>
+          <td><b>${timeStr}</b></td>
+          <td style="color:#38bdf8; font-weight:700;">${Number(item.temp).toFixed(1)} °C</td>
+          <td>${Number(item.hum).toFixed(1)} %</td>
+          <td><span class="history-badge ${badgeClass}">${statusText}</span></td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      if (isChartView && !isLiveTrendView) drawCanvasChart(cachedHistoryData);
+    };
+
+    const exportCSV = () => {
+      if (!cachedHistoryData || cachedHistoryData.length === 0) {
+        alert("No historical log records available to export.");
+        return;
+      }
+
+      let csvContent = "Date,Time (GST),Temperature (C),Humidity (%),Status\n";
+
+      cachedHistoryData.forEach(item => {
+        const timePoint = new Date(item.epoch * 1000);
+        const dateStr = timePoint.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        let hours = timePoint.getHours();
+        let ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12; hours = hours ? hours : 12;
+        const timeStr = `${String(hours).padStart(2, '0')}:00 ${ampm}`;
+
+        let statusText = 'OPTIMAL';
+        if (item.temp >= criticalLimit) statusText = 'CRITICAL HIGH';
+        else if (item.temp >= currentHighLimit) statusText = 'HIGH';
+        else if (item.temp >= 24.0) statusText = 'NORMAL';
+        else if (item.temp >= 18.0) statusText = 'OPTIMAL';
+        else statusText = 'LOW';
+
+        csvContent += `"${dateStr}","${timeStr}",${Number(item.temp).toFixed(1)},${Number(item.hum).toFixed(1)},"${statusText}"\n`;
+      });
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", "DLS4200_5Day_Temperature_Log.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    };
+
+    const openHistoryModal = async () => {
+      const tbody = document.getElementById('historyTableBody');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">Loading historical logs...</td></tr>';
+      }
+      document.getElementById('historyModal').classList.add('active');
+
+      try {
+        const url = isCloudMode ? (FIREBASE_BASE_URL + '/dls4200/history.json') : '/api/history';
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json();
+        renderHistoryTable(data || []);
+      } catch(e) {
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#f87171; padding:20px;">Offline — Error loading logs from device.</td></tr>';
+        }
+      }
+    };
+
+    const closeHistoryModal = () => {
+      document.getElementById('historyModal').classList.remove('active');
+    };
+
+    const triggerRestart = async () => {
+      if (confirm("Are you sure you want to reboot the ESP8266 system?")) {
+        try {
+          await sendCommand('/api/restart', { action: 'restart' });
+          alert("Reboot command sent! The system will restart shortly.");
+        } catch(e) {
+          alert("Failed to send restart command.");
+        }
+      }
+    };
+
+    document.getElementById('historyModal').addEventListener('click', (e) => {
+      if (e.target.id === 'historyModal') closeHistoryModal();
+    });
+    document.getElementById('settingsModal').addEventListener('click', (e) => {
+      if (e.target.id === 'settingsModal') closeSettingsModal();
+    });
+    document.getElementById('threshAuthModal').addEventListener('click', (e) => {
+      if (e.target.id === 'threshAuthModal') closeThreshAuthModal();
+    });
+    document.getElementById('otaAuthModal').addEventListener('click', (e) => {
+      if (e.target.id === 'otaAuthModal') closeOtaAuthModal();
+    });
+    document.getElementById('aboutModal').addEventListener('click', (e) => {
+      if (e.target.id === 'aboutModal') closeAboutModal();
+    });
+    document.getElementById('manualModal').addEventListener('click', (e) => {
+      if (e.target.id === 'manualModal') closeManualModal();
+    });
+    document.getElementById('alarmModal').addEventListener('click', (e) => {
+      if (e.target.id === 'alarmModal') closeAlarmModal();
+    });
+    document.getElementById('resetPeakModal').addEventListener('click', (e) => {
+      if (e.target.id === 'resetPeakModal') closeResetPeakModal();
+    });
+    document.getElementById('clearLogModal').addEventListener('click', (e) => {
+      if (e.target.id === 'clearLogModal') closeClearLogModal();
+    });
+    document.getElementById('syncTimeModal').addEventListener('click', (e) => {
+      if (e.target.id === 'syncTimeModal') closeSyncTimeModal();
+    });
+    document.getElementById('clearAlarmModal').addEventListener('click', (e) => {
+      if (e.target.id === 'clearAlarmModal') closeClearAlarmModal();
+    });
+    document.getElementById('soundTestSelectModal').addEventListener('click', (e) => {
+      if (e.target.id === 'soundTestSelectModal') closeSoundTestSelectModal();
+    });
+    document.getElementById('criticalTestAuthModal').addEventListener('click', (e) => {
+      if (e.target.id === 'criticalTestAuthModal') closeCriticalTestAuthModal();
+    });
+
+    const updateUAETime = () => {
+      try {
+        const now = new Date();
+        const options = {
+          timeZone: 'Asia/Dubai',
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        };
+        const formatter = new Intl.DateTimeFormat('en-GB', options);
+        const clockEl = document.getElementById('uae-clock');
+        if (clockEl) {
+          clockEl.innerText = formatter.format(now);
+        }
+      } catch (e) {
+        const now = new Date();
+        const clockEl = document.getElementById('uae-clock');
+        if (clockEl) clockEl.innerText = now.toLocaleTimeString();
+      }
+    };
+
+    const getAudioContext = () => {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    };
+
+    const checkAndTriggerAlarm = () => {
+      const container = document.querySelector('.dashboard-container');
+      const isLinkActive = container && container.classList.contains('link-active');
+      const cardTemp = document.getElementById('card-temp');
+      
+      const isCriticalTemp = isLinkActive && cardTemp && cardTemp.classList.contains('temp-red') && window.currentLiveTemp > criticalLimit;
+      const isHighTemp = isLinkActive && cardTemp && cardTemp.classList.contains('temp-red');
+
+      let targetAlarm = null;
+      let isCritical = false;
+
+      if (isHighTemp && !isAlarmAcknowledgedByServer && isAlarmSoundEnabled && !isAlarmMutedByServer) {
+        if (isCriticalTemp) {
+          targetAlarm = 'CRITICAL_HIGH';
+          isCritical = true;
+        } else {
+          targetAlarm = 'HIGH_TEMP';
+          isCritical = false;
+        }
+      }
+
+      if (targetAlarm !== currentAlarmType) {
+        if (alarmTimeout) {
+          clearTimeout(alarmTimeout);
+          alarmTimeout = null;
+        }
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
+
+        currentAlarmType = targetAlarm;
+
+        if (currentAlarmType) {
+          runAlarmLoop(isCritical);
+        }
+      }
+    };
+
+    const fetchLiveData = async () => {
+      // 1. Check if browser itself is disconnected from internet
+      if (!navigator.onLine) {
+        setSystemOfflineUI("⚠️ CAUTION: NO INTERNET CONNECTION — OFFLINE");
+        return;
+      }
+
+      try {
+        const url = isCloudMode ? (FIREBASE_BASE_URL + '/dls4200/live.json') : '/api/data';
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) {
+          setSystemOfflineUI("⚠️ CAUTION: SYSTEM OFFLINE — NO DATA");
+          return;
+        }
+        const data = await res.json();
+        if (!data) {
+          setSystemOfflineUI("⚠️ CAUTION: SYSTEM OFFLINE — NO DATA");
+          return;
+        }
+
+        // 2. Verify ESP8266 Cloud Heartbeat Freshness (Detects if ESP8266 lost Wi-Fi / Power)
+        let isEspOnline = true;
+        if (isCloudMode) {
+          const nowEpoch = Math.floor(Date.now() / 1000);
+          if (data.updated !== undefined) {
+            if (data.updated !== lastFirebaseUpdatedEpoch) {
+              lastFirebaseUpdatedEpoch = data.updated;
+              lastFirebaseChangeLocalMs = Date.now();
+            }
+            // If ESP8266 has valid NTP epoch time, compare directly with current UTC epoch
+            if (data.updated > 1750000000) {
+              if ((nowEpoch - data.updated) > OFFLINE_TIMEOUT_SECONDS) {
+                isEspOnline = false;
+              }
+            }
+            // Fallback: if watching live and Firebase timestamp hasn't changed in >135s
+            if (lastFirebaseChangeLocalMs > 0 && ((Date.now() - lastFirebaseChangeLocalMs) > (OFFLINE_TIMEOUT_SECONDS * 1000))) {
+              isEspOnline = false;
+            }
+          } else {
+            isEspOnline = false;
+          }
+        }
+
+        if (!isEspOnline) {
+          setSystemOfflineUI("⚠️ CAUTION: SYSTEM OFFLINE — NO DATA");
+          return;
+        }
+
+        window.currentLiveTemp = data.temp;
+
+        if (data.threshold !== undefined) currentThreshold = data.threshold;
+        if (data.highLimit !== undefined) currentHighLimit = data.highLimit;
+        if (data.offset !== undefined) currentOffset = data.offset;
+        if (data.alarmEn !== undefined) isAlarmSoundEnabled = data.alarmEn;
+        if (data.alarmMuted !== undefined) isAlarmMutedByServer = data.alarmMuted;
+        isAlarmAcknowledgedByServer = Boolean(data.alarmAck);
+
+        if (data.critTest && !lastServerCritTestState) {
+          lastServerCritTestState = true;
+          runCriticalAlarmTestSequence();
+        } else if (!data.critTest) {
+          lastServerCritTestState = false;
+        }
+
+        const muteBtn = document.getElementById('muteBtn');
+        if (muteBtn) {
+          if (isAlarmMutedByServer) {
+            muteBtn.innerHTML = '🔊 UNMUTE';
+            muteBtn.style.background = 'rgba(239, 68, 68, 0.25)';
+            muteBtn.style.borderColor = '#ef4444';
+          } else {
+            muteBtn.innerHTML = '🔇 MUTE 1H';
+            muteBtn.style.background = '';
+            muteBtn.style.borderColor = '';
+          }
+        }
+
+        const container = document.querySelector('.dashboard-container');
+        const banner = document.getElementById('temp-banner');
+        const cardTemp = document.getElementById('card-temp');
+        const cardHum  = document.getElementById('card-hum');
+        const cardSig  = document.getElementById('card-sig');
+
+        if (data.link) {
+          container.classList.remove('link-inactive');
+          container.classList.add('link-active');
+          document.body.classList.remove('link-inactive');
+          document.body.classList.add('link-active');
+          
+          cardTemp.classList.remove('temp-red', 'temp-blue', 'temp-green', 'offline');
+          cardHum.classList.remove('offline');
+          cardSig.classList.remove('offline');
+
+          document.getElementById('val-temp').innerHTML = Number(data.temp).toFixed(1) + ' &deg;C';
+          document.getElementById('val-hum').innerText = Number(data.hum).toFixed(1) + ' %';
+          document.getElementById('val-sig').innerText = data.rssiPct + ' %';
+          document.getElementById('sub-sig').innerText = '(' + data.rssi + ' dBm)';
+          
+          document.getElementById('bar-temp').style.width = Math.min(Math.max(Math.round((data.temp / 50) * 100), 0), 100) + '%';
+          document.getElementById('bar-hum').style.width = Math.min(Math.max(Math.round(data.hum), 0), 100) + '%';
+          document.getElementById('bar-sig').style.width = Math.min(Math.max(Math.round(data.rssiPct), 0), 100) + '%';
+          
+          const dot = document.getElementById('heartbeatDot');
+          if (dot) {
+            dot.classList.add('pulse');
+            setTimeout(() => dot.classList.remove('pulse'), 350);
+          }
+
+          const nowEpoch = Math.floor(Date.now() / 1000);
+          liveTrendData.push({ epoch: nowEpoch, temp: data.temp, hum: data.hum });
+          if (liveTrendData.length > MAX_LIVE_POINTS) {
+            liveTrendData.shift();
+          }
+          if (isChartView && isLiveTrendView) {
+            drawCanvasChart(liveTrendData);
+          }
+
+          const peakEl = document.getElementById('tempPeakSub');
+          if (peakEl && data.peakTemp !== undefined && data.peakTemp > -100) {
+            peakEl.innerHTML = 'Peak: ' + Number(data.peakTemp).toFixed(1) + ' &deg;C';
+            currentPeakTemp = data.peakTemp;
+            currentPeakTime = data.peakTime || 0;
+          }
+
+          if (data.temp > criticalLimit) {
+            banner.className = 'temp-banner temp-critical-alert';
+            banner.innerHTML = '⚠️ CRITICAL HIGH: DRIVE ROOM TEMP EXTREME (' + Number(data.temp).toFixed(1) + ' &deg;C) — TAP TO MUTE 1H';
+            cardTemp.classList.add('temp-red');
+
+            if ("Notification" in window && Notification.permission === "granted") {
+              if (!hasNotifiedHighTemp) {
+                new Notification("🚨 CRITICAL ALARM: Extreme Temperature", {
+                  body: "Mooring Drive Room Temp reached critical level: " + Number(data.temp).toFixed(1) + " °C!",
+                  requireInteraction: true
+                });
+                hasNotifiedHighTemp = true;
+              }
+            }
+          } else if (data.temp >= currentThreshold) {
+            banner.className = 'temp-banner temp-high-alert';
+            banner.innerHTML = '⚠️ CAUTION: DRIVE ROOM TEMP HIGH (' + Number(data.temp).toFixed(1) + ' &deg;C) — TAP TO MUTE 1H';
+            cardTemp.classList.add('temp-red');
+
+            if ("Notification" in window && Notification.permission === "granted") {
+              if (!hasNotifiedHighTemp) {
+                new Notification("⚠️ HIGH TEMPERATURE ALERT", {
+                  body: "Mooring Drive Room Temp is high: " + Number(data.temp).toFixed(1) + " °C",
+                  requireInteraction: false
+                });
+                hasNotifiedHighTemp = true;
+              }
+            }
+          } else {
+            hasNotifiedHighTemp = false;
+            if (data.temp >= 24.0) {
+              banner.className = 'temp-banner temp-blue-banner';
+              banner.innerHTML = '✔ TEMPERATURE NORMAL';
+              cardTemp.classList.add('temp-blue');
+            } else {
+              banner.className = 'temp-banner temp-green-banner';
+              banner.innerHTML = '✔ TEMPERATURE OPTIMAL';
+              cardTemp.classList.add('temp-green');
+            }
+          }
+        } else {
+          // Receiver is online, but LoRa Transmitter link is inactive
+          setSystemOfflineUI("⚠️ CAUTION: LINK NOT ACTIVE — NO DATA");
+          document.getElementById('statusInactiveBadge').innerHTML = '⚠️ CAUTION: LINK NOT ACTIVE';
+          document.getElementById('breakCenterBadge').innerHTML = '⚠️ SIGNAL BREAK';
+        }
+        
+        checkAndTriggerAlarm();
+      } catch (e) {
+        setSystemOfflineUI("⚠️ CAUTION: SYSTEM OFFLINE — NO DATA");
+      }
+    };
+
+    window.addEventListener('offline', () => setSystemOfflineUI("⚠️ CAUTION: NO INTERNET CONNECTION — OFFLINE"));
+    window.addEventListener('online', () => fetchLiveData());
+
+    ['click', 'mousemove', 'keydown', 'touchstart'].forEach(evt => {
+      window.addEventListener(evt, () => {
+        const ctx = getAudioContext();
+        if (ctx && ctx.state === 'running') {
+          document.getElementById('audio-unlock-banner').style.display = 'none';
+        }
+      }, { once: false });
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      setInterval(updateUAETime, 1000);
+
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+
+      fetchLiveData();
+      if (!livePollTimer) {
+        livePollTimer = setInterval(fetchLiveData, 3000);
+      }
+
+      if (sessionStorage.getItem('dls_session') === 'authenticated') {
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('dashboardView').style.display = 'flex';
+      } else {
+        document.getElementById('loginView').style.display = 'flex';
+        document.getElementById('dashboardView').style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>
