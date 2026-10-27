@@ -1347,8 +1347,10 @@
     let txClientTimeoutTimer = null;
 
     const pushCloudCommand = async (actionName, extraParams = {}) => {
+      // Generates a 9-digit ID (1 to 2,000,000,000) that safely fits inside ESP8266 32-bit unsigned long
+      const safe32BitId = Math.floor((Date.now() / 100) % 2000000000) + 1;
       const payload = Object.assign({
-        id: Date.now(),
+        id: safe32BitId,
         action: actionName
       }, extraParams);
 
@@ -1580,21 +1582,21 @@
       const ackEl = document.getElementById('txStatAck');
       if (ackEl) {
         ackEl.style.color = '#fbbf24';
-        ackEl.innerText = '⏳ Cloud Queued: ' + cmdStr + ' (Awaiting Receiver Sync & LoRa ACK...)';
+        ackEl.innerText = '⏳ Cloud Queued: ' + cmdStr + ' (Awaiting 60s Receiver Sync & LoRa ACK...)';
       }
 
       if (cmdStr === 'CMD:TX_PING') {
-        renderTxActionMonitor('ping_running', 'PING TEST IN PROGRESS...', 'Command sent to cloud. Waiting for SAS Workshop Receiver to relay ping & verify LoRa ACK...', '#38bdf8');
+        renderTxActionMonitor('ping_running', 'PING TEST IN PROGRESS...', 'Command queued in cloud. Receiver polls every 60s, relays ping over 433 MHz LoRa & verifies ACK...', '#38bdf8');
       } else if (cmdStr === 'CMD:TX_RESET_HW') {
-        renderTxActionMonitor('busy_spinner', 'HARDWARE RESET IN PROGRESS...', 'Command sent to cloud. Re-initializing transmitter SX1278 SPI bus and temperature sensor...', '#fbbf24');
+        renderTxActionMonitor('busy_spinner', 'HARDWARE RESET IN PROGRESS...', 'Command queued in cloud. Re-initializing transmitter SX1278 SPI bus and temperature sensor...', '#fbbf24');
       } else if (cmdStr === 'CMD:TX_REBOOT') {
-        renderTxActionMonitor('busy_spinner', 'TRANSMITTER RESTART IN PROGRESS...', 'Command sent to cloud. Awaiting remote reboot confirmation from Mooring Drive Room...', '#f87171');
+        renderTxActionMonitor('busy_spinner', 'TRANSMITTER RESTART IN PROGRESS...', 'Command queued in cloud. Awaiting remote reboot confirmation from Mooring Drive Room...', '#f87171');
       } else if (cmdStr.startsWith('CMD:TX_INT:')) {
-        renderTxActionMonitor('busy_spinner', 'UPDATING TRANSMIT INTERVAL...', 'Synchronizing new interval setting (' + cmdStr.substring(11) + 's) with transmitter...', '#c084fc');
+        renderTxActionMonitor('busy_spinner', 'UPDATING TRANSMIT INTERVAL...', 'Synchronizing new interval setting (' + cmdStr.substring(11) + 's) with transmitter on next cloud sync...', '#c084fc');
       }
 
-      // Account for 60s Firebase sync interval + 2 TX intervals for remote cloud confirmation
-      const maxWaitMs = Math.max(135000, (125 + currentConfiguredTxInt * 2 + 18) * 1000);
+      // Account for 60s Firebase command pickup + 2 TX intervals + 60s Firebase ACK upload
+      const maxWaitMs = Math.max(150000, (130 + currentConfiguredTxInt * 2 + 20) * 1000);
       if (txClientTimeoutTimer) clearTimeout(txClientTimeoutTimer);
       txClientTimeoutTimer = setTimeout(() => {
         if (txOperationInProgress) {
@@ -2134,7 +2136,7 @@
           alarmEn: pendingAlarmEnVal
         });
         if (ok) {
-          alert("Settings queued to cloud! Receiver will apply on next sync.");
+          alert("Settings queued to cloud! Receiver will apply on next 60s sync.");
           currentThreshold = pendingThresholdVal;
           currentHighLimit = pendingHighLimitVal;
           currentOffset = pendingOffsetVal;
@@ -2261,7 +2263,7 @@
       try {
         const ok = await pushCloudCommand('ack_alarm');
         if (ok) {
-          alert("Alarms acknowledged! Active audible alerts silenced.");
+          alert("Alarms acknowledged! Receiver will silence active alerts on next sync.");
           openAlarmModal();
           fetchLiveData();
         }
@@ -2640,7 +2642,7 @@
         try {
           const ok = await pushCloudCommand('restart');
           if (ok) {
-            alert("Receiver reboot command queued to cloud. It will restart on the next sync cycle.");
+            alert("Receiver reboot command queued to cloud. It will restart on the next 60s sync cycle.");
           }
         } catch (e) {
           alert("Failed to send restart command.");
@@ -2784,6 +2786,8 @@
 
           if (activeTxCmdSeq === 0 && srvSeq > baselineTxCmdSeq) {
             activeTxCmdSeq = srvSeq;
+            // Clear command node in Firebase once picked up by Receiver to prevent replay on power cycle
+            fetch(`${FIREBASE_HOST}/dls4200/commands.json`, { method: 'DELETE' }).catch(() => {});
           }
 
           if (activeTxCmdSeq > 0 && srvSeq === activeTxCmdSeq) {
